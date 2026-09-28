@@ -167,20 +167,68 @@ struct FaviconView: View {
 }
 
 struct LoadingLineView: View {
+    private static let height: CGFloat = 2.5
+    private static let horizontalInset: CGFloat = 16
+    private static let topInset: CGFloat = 4
+    private static let glowRadius: CGFloat = 4
+    private static let minimumProgress = 0.08
+    private static let shimmerPeriod = 1.1
+    private static let shimmerWidth = 0.22
+    private static let colors = [
+        Color(red: 0.36, green: 0.62, blue: 1), Color(red: 0.6, green: 0.45, blue: 1), Color(red: 0.95, green: 0.47, blue: 0.76),
+    ]
+
     let page: WebPage?
+    @ViewState private var displayedProgress = 0.0
+    @ViewState private var isVisible = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geometry in
-            Rectangle()
-                .fill(Color.accentColor)
-                .frame(width: geometry.size.width * (page?.progress ?? 0), height: LayoutConstants.loadingLineHeight)
-                .opacity(page?.isLoading == true ? 1 : 0)
-                .animation(Motion.snappy(reduceMotion: reduceMotion), value: page?.progress)
-                .animation(.easeOut(duration: 0.3), value: page?.isLoading)
+            TimelineView(.animation(paused: !isVisible || reduceMotion)) { context in
+                bar(phase: reduceMotion ? 0 : shimmerPhase(at: context.date))
+            }
+            .frame(width: max(geometry.size.width - Self.horizontalInset * 2, 0) * displayedProgress, height: Self.height)
+            .offset(x: Self.horizontalInset, y: Self.topInset)
         }
-        .frame(height: LayoutConstants.loadingLineHeight)
+        .frame(height: Self.height + Self.topInset + Self.glowRadius)
+        .opacity(isVisible ? 1 : 0)
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .onChange(of: page?.progress, initial: true) { update() }
+        .onChange(of: page?.isLoading) { update() }
+    }
+
+    private func bar(phase: Double) -> some View {
+        let gradient = LinearGradient(colors: Self.colors, startPoint: .leading, endPoint: .trailing)
+        let shimmer = LinearGradient(
+            colors: [.clear, .white.opacity(0.75), .clear],
+            startPoint: UnitPoint(x: phase - Self.shimmerWidth, y: 0.5),
+            endPoint: UnitPoint(x: phase + Self.shimmerWidth, y: 0.5)
+        )
+        return Capsule()
+            .fill(gradient)
+            .overlay(Capsule().fill(shimmer))
+            .background(Capsule().fill(gradient).blur(radius: Self.glowRadius).opacity(0.7))
+    }
+
+    private func shimmerPhase(at date: Date) -> Double {
+        let cycle = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: Self.shimmerPeriod) / Self.shimmerPeriod
+        return cycle * (1 + Self.shimmerWidth * 2) - Self.shimmerWidth
+    }
+
+    private func update() {
+        guard let page else { return }
+        guard !page.isLoading else { return show(progress: page.progress) }
+        guard isVisible else { return }
+        withAnimation(.smooth(duration: 0.25)) { displayedProgress = 1 }
+        withAnimation(.easeOut(duration: 0.4).delay(0.25)) { isVisible = false }
+    }
+
+    private func show(progress: Double) {
+        if !isVisible { displayedProgress = Self.minimumProgress }
+        withAnimation(.easeOut(duration: 0.2)) { isVisible = true }
+        withAnimation(.smooth(duration: 0.4)) { displayedProgress = max(progress, Self.minimumProgress, displayedProgress) }
     }
 }
 
@@ -244,5 +292,12 @@ struct ThemedForeground: ViewModifier {
 extension View {
     func themedForeground(_ theme: SpaceTheme) -> some View {
         modifier(ThemedForeground(theme: theme))
+    }
+}
+
+extension NSResponder {
+    var isInsideWebView: Bool {
+        guard let view = self as? NSView else { return false }
+        return sequence(first: view, next: \.superview).contains { $0 is WKWebView }
     }
 }

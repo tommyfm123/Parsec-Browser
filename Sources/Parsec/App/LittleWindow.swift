@@ -60,6 +60,12 @@ final class LittleWindowModel: WebPageHost {
 
 @MainActor
 final class LittleWindow: NSWindow, NSWindowDelegate {
+    override func noResponder(for eventSelector: Selector) {
+        guard eventSelector == #selector(NSResponder.keyDown(with:)), firstResponder?.isInsideWebView == true else {
+            return super.noResponder(for: eventSelector)
+        }
+    }
+
     let model: LittleWindowModel
     var onClose: (() -> Void)?
     private var isPromoting = false

@@ -21,8 +21,12 @@ final class ContentBlocker {
     private static let thirdPartyCookieListIdentifier = "third-party-cookies-1"
     private static let thirdPartyCookieRules = #"[{"trigger":{"url-filter":".*","load-type":["third-party"]},"action":{"type":"block-cookies"}}]"#
 
+    private static let googleOneTapListIdentifier = "google-one-tap-1"
+    private static let googleOneTapRules = ##"[{"trigger":{"url-filter":"^https?://accounts\\.google\\.com/gsi/iframe/select"},"action":{"type":"block"}},{"trigger":{"url-filter":".*"},"action":{"type":"css-display-none","selector":"#credential_picker_container, #credential_picker_iframe"}}]"##
+
     private(set) var ruleLists: [WKContentRuleList] = []
     private(set) var cookieRuleList: WKContentRuleList?
+    private(set) var googleOneTapRuleList: WKContentRuleList?
     private var observers: [([WKContentRuleList]) -> Void] = []
     private let defaults = UserDefaults.standard
     private let filtersFolderURL: URL = {
@@ -37,7 +41,9 @@ final class ContentBlocker {
 
     func prepare() {
         Task {
-            cookieRuleList = try? await WKContentRuleListStore.default()?.compileContentRuleList(forIdentifier: Self.thirdPartyCookieListIdentifier, encodedContentRuleList: Self.thirdPartyCookieRules)
+            let store = WKContentRuleListStore.default()
+            cookieRuleList = try? await store?.compileContentRuleList(forIdentifier: Self.thirdPartyCookieListIdentifier, encodedContentRuleList: Self.thirdPartyCookieRules)
+            googleOneTapRuleList = try? await store?.compileContentRuleList(forIdentifier: Self.googleOneTapListIdentifier, encodedContentRuleList: Self.googleOneTapRules)
             await compileAll(version: currentVersion)
             await refreshIfStale()
         }
@@ -46,6 +52,7 @@ final class ContentBlocker {
     func install(on controller: WKUserContentController, includesBlocker: Bool) {
         controller.removeAllContentRuleLists()
         cookieRuleList.map(controller.add)
+        if BrowserStore.shared.settings.hidesGoogleOneTap { googleOneTapRuleList.map(controller.add) }
         guard includesBlocker else { return }
         ruleLists.forEach(controller.add)
     }
