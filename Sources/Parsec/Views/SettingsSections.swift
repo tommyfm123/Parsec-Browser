@@ -858,6 +858,17 @@ struct ShortcutRecorder: View {
 
 struct PrivacySettings: View {
     @ViewState private var newBlockedSite = ""
+
+    private var oneTapBinding: Binding<Bool> {
+        Binding(
+            get: { BrowserStore.shared.settings.hidesGoogleOneTap },
+            set: { isHidden in
+                BrowserStore.shared.settings.hidesGoogleOneTap = isHidden
+                BrowserStore.shared.saveSoon()
+                BrowserStore.shared.allTabNodes.compactMap(\.page).forEach { $0.applyBlockerRules() }
+            }
+        )
+    }
     @ViewState private var statusMessage = ""
     private var store: BrowserStore { BrowserStore.shared }
 
@@ -867,6 +878,7 @@ struct PrivacySettings: View {
             SettingsItem(symbolName: "lock.fill", tint: .green, title: "Solo HTTPS", detail: "Aviso claro antes de abrir un sitio sin cifrar.") { EnabledMark() }
             SettingsItem(symbolName: "hand.raised.fill", tint: .indigo, title: "Cookies de terceros bloqueadas", detail: "Regla propia de Parsec, siempre activa. Datos separados por perfil.") { EnabledMark() }
             SettingsToggle(symbolName: "exclamationmark.shield.fill", tint: .red, title: "Avisar de sitios fraudulentos", detail: "Phishing y malware, con Navegación segura. Se aplica a pestañas nuevas.", isOn: SettingsBinding.make(\.warnsAboutFraudulentSites))
+            SettingsToggle(symbolName: "person.crop.circle.badge.xmark", tint: .gray, title: "Ocultar avisos de “Acceder con Google”", detail: "La ventanita que aparece arriba a la derecha en muchos sitios. El botón de Google sigue funcionando.", isOn: oneTapBinding)
             SettingsToggle(symbolName: "arrow.down.app.fill", tint: .orange, title: "Confirmar descargas de riesgo", detail: "Apps, instaladores y scripts. macOS los revisa con Gatekeeper al abrirlos.", isOn: SettingsBinding.make(\.warnsBeforeRiskyDownloads))
         }
         SettingsGroup(title: "Permisos de sitios", footer: "Las notificaciones web están desactivadas. El portapapeles solo se lee cuando pegas.") {
@@ -988,15 +1000,47 @@ struct EnabledMark: View {
 
 struct PasswordSettings: View {
     @ViewState private var statusMessage = ""
+    @ViewState private var credentials: [SavedCredential] = []
+    @ViewState private var query = ""
     private var store: BrowserStore { BrowserStore.shared }
 
+    private var filteredCredentials: [SavedCredential] {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return credentials }
+        return credentials.filter { $0.host.localizedStandardContains(trimmed) || $0.account.localizedStandardContains(trimmed) }
+    }
+
     var body: some View {
-        SettingsGroup(title: "Llavero de macOS", footer: "Exporta desde la app Contraseñas (Archivo → Exportar) o desde Chrome. Borra el CSV después de importarlo.") {
-            SettingsItem(symbolName: "key.fill", tint: .gray, title: "Rellenar contraseñas", detail: "Solo cuando lo pides, con Touch ID.") {
+        SettingsGroup(title: "Cómo funciona", footer: "Exporta desde passwords.google.com (Configuración → Exportar), desde chrome://password-manager/settings en Arc o Chrome, o desde la app Contraseñas (Archivo → Exportar). Borra el CSV después de importarlo.") {
+            SettingsItem(symbolName: "key.fill", tint: .gray, title: "Rellenar contraseñas", detail: "Al entrar a un sitio con una contraseña guardada, Parsec te ofrece rellenarla con Touch ID. También con ⌘\\ o la llave de la barra de dirección.") {
                 Text("⌘\\").font(.system(size: 12, weight: .semibold, design: .rounded)).foregroundStyle(.secondary)
             }
-            SettingsItem(symbolName: "square.and.arrow.down", tint: .blue, title: "Importar desde CSV") {
+            SettingsItem(symbolName: "square.and.arrow.down", tint: .blue, title: "Importar desde CSV", detail: "Google, Chrome, Arc, Apple Contraseñas, 1Password o Bitwarden.") {
                 Button("Importar…", action: importPasswords)
+            }
+        }
+        SettingsGroup(title: "Guardadas (\(credentials.count))") {
+            if credentials.isEmpty {
+                Text("Todavía no hay contraseñas. Impórtalas o inicia sesión en un sitio y Parsec te ofrecerá guardarla.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                TextField("Buscar sitio o usuario", text: $query).textFieldStyle(.roundedBorder)
+                ForEach(filteredCredentials) { credential in
+                    HStack(spacing: 12) {
+                        FaviconView(url: URL(string: WebConstants.httpsScheme + "://" + credential.host), size: 16)
+                            .frame(width: 24, height: 24)
+                            .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.06)))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(credential.host).font(.system(size: 13))
+                            Text(credential.account.isEmpty ? "(sin usuario)" : credential.account).font(.system(size: 11)).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        IconButton(symbolName: "trash", label: "Borrar") { delete(credential) }
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
         SettingsGroup(title: "Nunca guardar en") {
@@ -1013,6 +1057,23 @@ struct PasswordSettings: View {
             }
         }
         if !statusMessage.isEmpty { SettingsStatus(message: statusMessage) }
+        Color.clear.frame(height: 0).onAppear(perform: reload)
+    }
+
+    private func reload() {
+        credentials = PasswordVault.shared.allCredentials()
+    }
+
+    private func delete(_ credential: SavedCredential) {
+        let alert = NSAlert()
+        alert.messageText = "¿Borrar la contraseña de \(credential.host)?"
+        alert.informativeText = credential.account
+        alert.addButton(withTitle: "Borrar")
+        alert.addButton(withTitle: "Cancelar")
+        alert.buttons.first?.hasDestructiveAction = true
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        PasswordVault.shared.delete(credential)
+        reload()
     }
 
     private func importPasswords() {
@@ -1023,6 +1084,7 @@ struct PasswordSettings: View {
         do {
             let importedCount = try PasswordVault.shared.importCSV(at: fileURL)
             statusMessage = "\(importedCount) contraseñas importadas al Llavero. Borra el archivo CSV."
+            reload()
         } catch {
             statusMessage = "No se pudieron importar: \(error.localizedDescription)"
         }

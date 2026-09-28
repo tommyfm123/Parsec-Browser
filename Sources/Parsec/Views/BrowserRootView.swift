@@ -395,6 +395,16 @@ struct OverlayLayer: View {
                         onTertiary: { model.resolvePasswordOffer(save: false, never: true) }
                     )
                 }
+                if let host = model.fillSuggestionHost {
+                    PromptCard(
+                        symbolName: "key.fill",
+                        message: "Tienes una contraseña guardada para \(host)",
+                        primaryTitle: "Rellenar",
+                        secondaryTitle: "Ahora no",
+                        onPrimary: { model.acceptFillSuggestion() },
+                        onSecondary: { model.fillSuggestionHost = nil }
+                    )
+                }
                 if !model.credentialChoices.isEmpty {
                     CredentialChooser(model: model)
                 }
@@ -418,6 +428,7 @@ struct OverlayLayer: View {
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.toast)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.permissionRequest?.id)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.passwordOffer?.id)
+        .animation(Motion.spring(reduceMotion: reduceMotion), value: model.fillSuggestionHost)
     }
 }
 

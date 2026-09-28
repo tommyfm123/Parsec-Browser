@@ -6,6 +6,11 @@ struct SavedCredential: Hashable, Identifiable {
     let host: String
     let account: String
     var id: String { host + "|" + account }
+
+    func matches(host pageHost: String) -> Bool {
+        let normalizedHost = PasswordVault.normalized(pageHost)
+        return normalizedHost == host || normalizedHost.hasSuffix("." + host) || host.hasSuffix("." + normalizedHost)
+    }
 }
 
 enum PasswordVaultError: Error {
@@ -20,8 +25,36 @@ final class PasswordVault {
     private static let urlColumnNames: Set<String> = ["url", "website", "login_uri"]
     private static let usernameColumnNames: Set<String> = ["username", "login_username", "user"]
     private static let passwordColumnNames: Set<String> = ["password", "login_password"]
+    private static let wwwPrefix = "www."
+    private static let creatorCode: OSType = 0x5052_5343
+    private static let minimumDomainLabels = 2
+
+    static func normalized(_ host: String) -> String {
+        let lowercased = host.lowercased()
+        return lowercased.hasPrefix(wwwPrefix) ? String(lowercased.dropFirst(wwwPrefix.count)) : lowercased
+    }
+
+    func allCredentials() -> [SavedCredential] {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassInternetPassword,
+            kSecAttrCreator as String: Self.creatorCode,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true,
+        ]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let items = result as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            guard let host = item[kSecAttrServer as String] as? String else { return nil }
+            return SavedCredential(host: host, account: item[kSecAttrAccount as String] as? String ?? "")
+        }
+        .sorted { ($0.host, $0.account) < ($1.host, $1.account) }
+    }
 
     func credentials(forHost host: String) -> [SavedCredential] {
+        Self.candidateHosts(for: host).flatMap(credentials(exactHost:))
+    }
+
+    private func credentials(exactHost host: String) -> [SavedCredential] {
         var query = baseQuery(host: host)
         query[kSecMatchLimit as String] = kSecMatchLimitAll
         query[kSecReturnAttributes as String] = true
@@ -33,8 +66,15 @@ final class PasswordVault {
         }
     }
 
+    private static func candidateHosts(for host: String) -> [String] {
+        let labels = normalized(host).split(separator: ".").map(String.init)
+        guard labels.count >= minimumDomainLabels else { return [normalized(host)] }
+        let domains = (0...(labels.count - minimumDomainLabels)).map { labels[$0...].joined(separator: ".") }
+        return domains + domains.map { wwwPrefix + $0 }
+    }
+
     func hasPassword(host: String, account: String, password: String) -> Bool {
-        (try? readPassword(for: SavedCredential(host: host, account: account))) == password
+        (try? readPassword(for: SavedCredential(host: Self.normalized(host), account: account))) == password
     }
 
     func authenticatedPassword(for credential: SavedCredential) async throws -> String {
@@ -44,7 +84,8 @@ final class PasswordVault {
         return try readPassword(for: credential)
     }
 
-    func save(host: String, account: String, password: String) throws {
+    func save(host rawHost: String, account: String, password: String) throws {
+        let host = Self.normalized(rawHost)
         let passwordData = Data(password.utf8)
         var query = baseQuery(host: host)
         query[kSecAttrAccount as String] = account
@@ -55,6 +96,7 @@ final class PasswordVault {
         }
         query[kSecValueData as String] = passwordData
         query[kSecAttrLabel as String] = StorageConstants.keychainLabelPrefix + host
+        query[kSecAttrCreator as String] = Self.creatorCode
         let addStatus = SecItemAdd(query as CFDictionary, nil)
         guard addStatus == errSecSuccess else { throw PasswordVaultError.keychain(addStatus) }
     }
