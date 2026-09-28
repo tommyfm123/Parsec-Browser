@@ -1,0 +1,15 @@
+#!/bin/zsh
+set -euo pipefail
+PROJECT_ROOT="${0:A:h:h}"
+CONFIGURATION="${1:-release}"
+APP_PATH="$PROJECT_ROOT/build/Parsec.app"
+cd "$PROJECT_ROOT"
+swift build -c "$CONFIGURATION"
+BINARY_PATH="$(swift build -c "$CONFIGURATION" --show-bin-path)/Parsec"
+rm -rf "$APP_PATH"
+mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
+cp "$BINARY_PATH" "$APP_PATH/Contents/MacOS/Parsec"
+cp Support/Info.plist "$APP_PATH/Contents/Info.plist"
+cp -R Support/Resources/. "$APP_PATH/Contents/Resources/"
+codesign --force --sign - --options runtime --entitlements Support/Parsec.entitlements "$APP_PATH"
+echo "$APP_PATH"
