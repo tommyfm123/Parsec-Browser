@@ -129,6 +129,14 @@ struct TabRow: View {
         model.close(node)
     }
 
+    private func selectNode() {
+        model.select(node)
+    }
+
+    private func beginRenaming() {
+        model.renamingNodeID = node.id
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             HStack(spacing: 8) {
@@ -150,7 +158,8 @@ struct TabRow: View {
             .padding(.leading, 10 + CGFloat(depth) * LayoutConstants.folderIndent)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .contentShape(Rectangle())
-            .onTapGesture { model.select(node) }
+            .onTapGesture(count: 2, perform: beginRenaming)
+            .onTapGesture(perform: selectNode)
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
             if isCapturing {
                 Circle().fill(Color.red).frame(width: 6, height: 6).accessibilityLabel("Usando cámara o micrófono")
@@ -225,6 +234,15 @@ struct FolderRow: View {
     @ViewState private var isHovering = false
     @ViewState private var isDropTargeted = false
 
+    private func toggleExpanded() {
+        withAnimation(Motion.disclosure(reduceMotion: reduceMotion)) { node.isExpanded.toggle() }
+        BrowserStore.shared.saveSoon()
+    }
+
+    private func beginRenaming() {
+        model.renamingNodeID = node.id
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             FolderIconView(symbolName: node.iconSymbol, size: SidebarViewMetrics.folderIconSize, weight: .semibold)
@@ -270,10 +288,8 @@ struct FolderRow: View {
         .animation(.snappy(duration: 0.15), value: isDropTargeted)
         .contentShape(Rectangle())
         .clickable()
-        .onTapGesture {
-            withAnimation(Motion.disclosure(reduceMotion: reduceMotion)) { node.isExpanded.toggle() }
-            BrowserStore.shared.saveSoon()
-        }
+        .onTapGesture(count: 2, perform: beginRenaming)
+        .onTapGesture(perform: toggleExpanded)
         .onHover { isHovering = $0 }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
