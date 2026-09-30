@@ -312,8 +312,9 @@ final class CommandBarModel {
 
 enum SearchSuggestions {
     static func fetch(for query: String) async -> [String] {
-        let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
-        guard let url = URL(string: WebConstants.googleSuggestURL + encodedQuery),
+        var components = URLComponents(string: WebConstants.googleSuggestURL)
+        components?.queryItems = [URLQueryItem(name: "client", value: "firefox"), URLQueryItem(name: "q", value: query)]
+        guard let url = components?.url,
               let (data, _) = try? await URLSession.shared.data(from: url),
               let payload = try? JSONSerialization.jsonObject(with: data) as? [Any],
               payload.count > 1 else { return [] }

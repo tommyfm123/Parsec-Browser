@@ -5,6 +5,7 @@ final class ClaudeCodeRunner: AssistantRun {
     private static let executableCandidates = [".local/bin/claude", ".claude/local/claude", "/opt/homebrew/bin/claude", "/usr/local/bin/claude"]
     private static let installHint = "No encontré Claude Code. Instálalo desde claude.com/claude-code y ejecuta claude una vez en la Terminal para iniciar sesión."
     private static let readTool = "Read"
+    private static let attachmentReadPermission = "Read(./attachments/**)"
     private static let webTools = ["WebSearch", "WebFetch"]
     private static let mcpToolPrefix = "mcp__"
 
@@ -30,12 +31,15 @@ final class ClaudeCodeRunner: AssistantRun {
             "-p", request.prompt,
             "--output-format", "stream-json",
             "--verbose",
+            "--restricted",
+            "--permission-mode", "dontAsk",
             "--include-partial-messages",
             "--tools", enabledTools.joined(separator: ","),
             "--setting-sources", "project",
             "--append-system-prompt", request.systemPrompt,
         ]
-        let allowedTools = enabledTools + connectorTools
+        let readPermissions = request.attachments.isEmpty ? [] : [Self.attachmentReadPermission]
+        let allowedTools = enabledTools.filter { $0 != Self.readTool } + readPermissions + connectorTools
         if !allowedTools.isEmpty { arguments += ["--allowedTools", allowedTools.joined(separator: ",")] }
         if request.enabledConnectors.isEmpty { arguments.append("--strict-mcp-config") }
         if let resumeSessionID = request.resumeSessionID { arguments += ["--resume", resumeSessionID] }
