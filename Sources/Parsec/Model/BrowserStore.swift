@@ -98,6 +98,23 @@ final class BrowserStore {
         settings = state.settings
         lastSpaceID = state.selectedSpaceID ?? spaces.first?.id
         ensureAtLeastOneSpace()
+        settings.restoresPreviousSession ? keepRestoredTabsAlive() : discardPreviousSessionTabs()
+    }
+
+    private func keepRestoredTabsAlive() {
+        let launchDate = Date()
+        for node in spaces.flatMap(\.today) {
+            node.lastActiveAt = launchDate
+            node.allTabs.forEach { $0.lastActiveAt = launchDate }
+        }
+    }
+
+    private func discardPreviousSessionTabs() {
+        for space in spaces {
+            let selectedWasToday = space.selectedNodeID.map { space.today.find($0) != nil } ?? false
+            if selectedWasToday { space.selectedNodeID = nil }
+            space.today.removeAll()
+        }
     }
 
     private func bootstrap() {

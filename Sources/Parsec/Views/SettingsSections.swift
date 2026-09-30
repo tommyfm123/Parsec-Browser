@@ -230,6 +230,7 @@ struct GeneralSettings: View {
             }
         }
         SettingsGroup(title: "Parsec") {
+            SettingsToggle(symbolName: "arrow.counterclockwise", tint: .green, title: "Restaurar la sesión anterior", detail: "Al abrir Parsec, recupera la ventana, las pestañas de hoy y la pestaña que tenías abierta. Se aplica al próximo inicio.", isOn: SettingsBinding.make(\.restoresPreviousSession))
             SettingsToggle(symbolName: "power", tint: .red, title: "Confirmar antes de salir", detail: "Pregunta antes de cerrar Parsec por completo.", isOn: SettingsBinding.make(\.confirmsBeforeQuit))
             SettingsItem(symbolName: "sparkles", tint: .purple, title: "Bienvenida", detail: "La presentación de Parsec, con sonido.") {
                 Button("Reproducir") { AppDelegate.shared.replayWelcome() }

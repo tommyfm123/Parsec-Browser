@@ -179,6 +179,7 @@ struct BrowserSettings: Codable {
     var agentUsesSessions = false
     var edgeRevealDelayMilliseconds = 200
     var confirmsBeforeQuit = false
+    var restoresPreviousSession = true
 
     init() {}
 
@@ -231,6 +232,7 @@ struct BrowserSettings: Codable {
         agentUsesSessions = try container.decodeIfPresent(Bool.self, forKey: .agentUsesSessions) ?? defaults.agentUsesSessions
         edgeRevealDelayMilliseconds = try container.decodeIfPresent(Int.self, forKey: .edgeRevealDelayMilliseconds) ?? defaults.edgeRevealDelayMilliseconds
         confirmsBeforeQuit = try container.decodeIfPresent(Bool.self, forKey: .confirmsBeforeQuit) ?? defaults.confirmsBeforeQuit
+        restoresPreviousSession = try container.decodeIfPresent(Bool.self, forKey: .restoresPreviousSession) ?? defaults.restoresPreviousSession
     }
 }
 
