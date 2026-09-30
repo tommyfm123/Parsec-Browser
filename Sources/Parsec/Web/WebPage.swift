@@ -32,12 +32,17 @@ protocol WebPageHost: AnyObject {
     func closePage(_ page: WebPage)
     func requestPermission(host: String, kind: PermissionKind, page: WebPage) async -> Bool
     func offerPasswordSave(host: String, username: String, password: String)
+    func suggestPasswordFill(for page: WebPage)
     func presentingWindow() -> NSWindow?
     func linkPreviewDidChange(_ event: LinkPreviewEvent, from page: WebPage)
 }
 
 extension WebPageHost {
     func linkPreviewDidChange(_ event: LinkPreviewEvent, from page: WebPage) {}
+}
+
+extension WebPageHost {
+    func suggestPasswordFill(for page: WebPage) {}
 }
 
 @MainActor
@@ -139,6 +144,7 @@ final class WebPage: NSObject {
         switch messageType {
         case .formDetected:
             hasSavedCredentials = !PasswordVault.shared.credentials(forHost: originHost).isEmpty
+            if hasSavedCredentials { host?.suggestPasswordFill(for: self) }
         case .submitted:
             let username = payload[Self.usernameKey] as? String ?? ""
             let password = payload[Self.passwordKey] as? String ?? ""
@@ -166,6 +172,7 @@ final class WebPage: NSObject {
 
     private func updateURL(_ url: URL?) {
         guard let url, url.scheme != WebConstants.httpContinueScheme else { return }
+        if url.host() != currentURL?.host() { hasSavedCredentials = false }
         currentURL = url
     }
 

@@ -60,7 +60,6 @@ enum LayoutConstants {
     static let hoverEdgeWidth: CGFloat = 8
     static let topBarHeight: CGFloat = 52
     static let conversationTitleLength = 40
-    static let loadingLineHeight: CGFloat = 2
     static let trafficLightsHeight: CGFloat = 30
     static let commandBarWidth: CGFloat = 640
     static let peekScale: CGFloat = 0.85

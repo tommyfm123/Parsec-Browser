@@ -58,6 +58,7 @@ final class WindowModel: WebPageHost {
     var permissionRequest: PermissionRequest?
     var passwordOffer: PasswordOffer?
     var credentialChoices: [SavedCredential] = []
+    var fillSuggestionHost: String?
     var focusedPaneID: UUID?
     var isThemeEditorPresented = false
     var isNewSpacePresented = false
@@ -167,6 +168,7 @@ extension WindowModel {
             handOffPictureInPicture(from: selectedNode, to: node)
             dismissLinkPreview()
         }
+        fillSuggestionHost = nil
         restoreConversation(for: node)
         if currentSpace.selectedNodeID != node.id { previousSelectionID = currentSpace.selectedNodeID }
         currentSpace.selectedNodeID = node.id
@@ -645,7 +647,7 @@ extension WindowModel {
 
     func fill(_ credential: SavedCredential) {
         credentialChoices = []
-        guard let page = activePage, page.currentHost == credential.host else { return }
+        guard let page = activePage, credential.matches(host: page.currentHost) else { return }
         Task {
             do {
                 try await page.fill(credential)
@@ -716,6 +718,16 @@ extension WindowModel {
         return await withCheckedContinuation { continuation in
             permissionRequest = PermissionRequest(host: host, kind: kind, profileID: page.profileID, continuation: continuation)
         }
+    }
+
+    func suggestPasswordFill(for page: WebPage) {
+        guard page === activePage, passwordOffer == nil, credentialChoices.isEmpty else { return }
+        fillSuggestionHost = page.currentHost
+    }
+
+    func acceptFillSuggestion() {
+        fillSuggestionHost = nil
+        fillPassword()
     }
 
     func offerPasswordSave(host: String, username: String, password: String) {

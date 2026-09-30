@@ -1,8 +1,15 @@
 import AppKit
+import WebKit
 import SwiftUI
 
 @MainActor
 final class BrowserWindow: NSWindow, NSWindowDelegate {
+    override func noResponder(for eventSelector: Selector) {
+        guard eventSelector == #selector(NSResponder.keyDown(with:)), firstResponder?.isInsideWebView == true else {
+            return super.noResponder(for: eventSelector)
+        }
+    }
+
     private static let frameAutosaveName = "ParsecMainWindow"
     private static let privateTitle = "Parsec — Privado"
 

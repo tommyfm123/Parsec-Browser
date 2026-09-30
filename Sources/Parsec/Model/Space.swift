@@ -198,6 +198,7 @@ struct BrowserSettings: Codable {
     var showsLinkPreviews = false
     var linkPreviewDelayMilliseconds = 700
     var linkPreviewSize = LinkPreviewSize.medium
+    var hidesGoogleOneTap = true
 
     init() {}
 
@@ -257,6 +258,7 @@ struct BrowserSettings: Codable {
         showsLinkPreviews = try container.decodeIfPresent(Bool.self, forKey: .showsLinkPreviews) ?? defaults.showsLinkPreviews
         linkPreviewDelayMilliseconds = try container.decodeIfPresent(Int.self, forKey: .linkPreviewDelayMilliseconds) ?? defaults.linkPreviewDelayMilliseconds
         linkPreviewSize = try container.decodeIfPresent(LinkPreviewSize.self, forKey: .linkPreviewSize) ?? defaults.linkPreviewSize
+        hidesGoogleOneTap = try container.decodeIfPresent(Bool.self, forKey: .hidesGoogleOneTap) ?? defaults.hidesGoogleOneTap
     }
 }
 
