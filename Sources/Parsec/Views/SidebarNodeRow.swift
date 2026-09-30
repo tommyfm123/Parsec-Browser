@@ -117,6 +117,17 @@ struct TabRow: View {
     private var isLoaded: Bool { node.allTabs.contains { $0.page != nil } }
     private var isCapturing: Bool { node.allTabs.contains { $0.page?.isCapturingMedia == true } }
     private var isToday: Bool { model.isTodayNode(node) }
+    private var closesTab: Bool { isToday || isLoaded }
+    private var closeSymbol: String { closesTab && !isToday ? "minus" : "xmark" }
+    private var closeLabel: String {
+        if isToday { return "Cerrar" }
+        return isLoaded ? "Cerrar pestaña" : "Quitar de la carpeta"
+    }
+
+    private func performCloseAction() {
+        guard closesTab else { return BrowserStore.shared.remove(node.id) }
+        model.close(node)
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -137,17 +148,17 @@ struct TabRow: View {
             if isCapturing {
                 Circle().fill(Color.red).frame(width: 6, height: 6).accessibilityLabel("Usando cámara o micrófono")
             }
-            if isHovering && (isToday || isLoaded) {
-                Button { model.close(node) } label: {
-                    Image(systemName: isToday ? "xmark" : "minus")
+            if isHovering {
+                Button(action: performCloseAction) {
+                    Image(systemName: closeSymbol)
                         .font(.system(size: 10, weight: .bold))
                         .frame(width: 20, height: 20)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .help(isToday ? "Cerrar" : "Descargar de memoria")
-                .accessibilityLabel(isToday ? "Cerrar" : "Descargar de memoria")
+                .help(closeLabel)
+                .accessibilityLabel(closeLabel)
             }
         }
         .padding(.leading, 10 + CGFloat(depth) * LayoutConstants.folderIndent)
