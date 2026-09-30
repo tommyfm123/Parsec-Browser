@@ -33,6 +33,11 @@ protocol WebPageHost: AnyObject {
     func requestPermission(host: String, kind: PermissionKind, page: WebPage) async -> Bool
     func offerPasswordSave(host: String, username: String, password: String)
     func presentingWindow() -> NSWindow?
+    func linkPreviewDidChange(_ event: LinkPreviewEvent, from page: WebPage)
+}
+
+extension WebPageHost {
+    func linkPreviewDidChange(_ event: LinkPreviewEvent, from page: WebPage) {}
 }
 
 @MainActor

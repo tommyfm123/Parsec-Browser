@@ -361,6 +361,7 @@ struct OverlayLayer: View {
                 PeekView(model: model, node: peek.node)
                     .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
+            LinkPreviewLayer(model: model)
             if let commandBar = model.commandBar {
                 CommandBarView(model: model, commandBar: commandBar)
                     .transition(.scale(scale: 0.97, anchor: .top).combined(with: .opacity))
@@ -412,6 +413,7 @@ struct OverlayLayer: View {
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.commandBar != nil)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.isHistoryPresented)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.peek?.id)
+        .animation(Motion.spring(reduceMotion: reduceMotion), value: model.linkPreview?.id)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.toast)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.permissionRequest?.id)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.passwordOffer?.id)

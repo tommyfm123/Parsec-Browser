@@ -1124,6 +1124,7 @@ struct DocumentSettings: View {
 struct AdvancedSettings: View {
     private static let suspendOptions = [1, 5, 10, 15, 60, 0]
     private static let revealDelayOptions = [0, 100, 200, 350, 500]
+    private static let previewDelayOptions = [300, 500, 700, 1000]
 
     private static func suspendLabel(_ minutes: Int) -> String {
         switch minutes {
@@ -1149,6 +1150,13 @@ struct AdvancedSettings: View {
             SettingsToggle(symbolName: "speaker.wave.2.fill", tint: .blue, title: "Sonidos de Parsec", isOn: SettingsBinding.make(\.playsSounds))
             SettingsItem(symbolName: "sidebar.squares.left", tint: .orange, title: "Retraso al abrir los paneles", detail: "Tiempo que el cursor debe quedarse en el borde para mostrar el sidebar o el panel de IA.") {
                 ParsecSelect(selection: SettingsBinding.make(\.edgeRevealDelayMilliseconds), options: Self.revealDelayOptions.map { ($0, $0 == 0 ? "Inmediato" : "\($0) ms") }, width: 120)
+            }
+            SettingsToggle(symbolName: "eye", tint: .cyan, title: "Vista previa de links", detail: "Al dejar el cursor sobre un link, muestra una miniatura de la página sin abrirla.", isOn: SettingsBinding.make(\.showsLinkPreviews))
+            SettingsItem(symbolName: "timer", tint: .cyan, title: "Retraso de la vista previa", detail: "Cuánto debe quedarse el cursor sobre el link.") {
+                ParsecSelect(selection: SettingsBinding.make(\.linkPreviewDelayMilliseconds), options: Self.previewDelayOptions.map { ($0, "\($0) ms") }, width: 120)
+            }
+            SettingsItem(symbolName: "rectangle.expand.vertical", tint: .cyan, title: "Tamaño de la vista previa") {
+                ParsecSelect(selection: SettingsBinding.make(\.linkPreviewSize), options: LinkPreviewSize.allCases.map { ($0, $0.title) }, width: 120)
             }
             SettingsToggle(symbolName: "pip.enter", tint: .pink, title: "Imagen en imagen automática", detail: "Al salir de una pestaña que reproduce video, el video pasa a una ventana flotante.", isOn: SettingsBinding.make(\.autoPictureInPicture))
             SettingsToggle(symbolName: "link", tint: .gray, title: "Mostrar la URL completa", detail: "En la barra de dirección, en lugar del dominio.", isOn: SettingsBinding.make(\.showsFullURL))

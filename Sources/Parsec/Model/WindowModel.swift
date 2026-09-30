@@ -72,8 +72,12 @@ final class WindowModel: WebPageHost {
     var activeAgentID: UUID?
     var pageConversations: [UUID: AssistantModel] = [:]
     var isHistoryPresented = false
+    var linkPreview: LinkPreviewState?
     @ObservationIgnored private var previousSelectionID: UUID?
     @ObservationIgnored private var pendingReveals: [RevealEdge: Task<Void, Never>] = [:]
+    @ObservationIgnored private var linkPreviewShowTask: Task<Void, Never>?
+    @ObservationIgnored private var linkPreviewDismissTask: Task<Void, Never>?
+    @ObservationIgnored private var isLinkPreviewHovered = false
 
     init(isPrivate: Bool = false) {
         self.isPrivate = isPrivate
@@ -155,7 +159,10 @@ final class WindowModel: WebPageHost {
 extension WindowModel {
     func select(_ node: SidebarNode) {
         guard !node.isFolder else { return }
-        if currentSpace.selectedNodeID != node.id { handOffPictureInPicture(from: selectedNode, to: node) }
+        if currentSpace.selectedNodeID != node.id {
+            handOffPictureInPicture(from: selectedNode, to: node)
+            dismissLinkPreview()
+        }
         restoreConversation(for: node)
         if currentSpace.selectedNodeID != node.id { previousSelectionID = currentSpace.selectedNodeID }
         currentSpace.selectedNodeID = node.id
@@ -457,6 +464,10 @@ extension WindowModel {
     }
 
     func dismissTransientUI() -> Bool {
+        if linkPreview != nil {
+            dismissLinkPreview()
+            return true
+        }
         if isHistoryPresented {
             isHistoryPresented = false
             return true
@@ -711,5 +722,70 @@ extension WindowModel {
 
     func presentingWindow() -> NSWindow? {
         window
+    }
+}
+
+extension WindowModel {
+    func linkPreviewDidChange(_ event: LinkPreviewEvent, from page: WebPage) {
+        guard store.settings.showsLinkPreviews, selectedNode?.allTabs.contains(where: { $0.page === page }) == true else { return }
+        switch event {
+        case .enter(let request): scheduleLinkPreview(request, from: page)
+        case .leave: scheduleLinkPreviewDismissal()
+        case .dismiss: dismissLinkPreview()
+        }
+    }
+
+    func setLinkPreviewHovered(_ isHovered: Bool) {
+        isLinkPreviewHovered = isHovered
+        if isHovered { linkPreviewDismissTask?.cancel() } else { scheduleLinkPreviewDismissal() }
+    }
+
+    func openLinkPreviewInTab() {
+        guard let url = linkPreview?.url else { return }
+        dismissLinkPreview()
+        _ = openInNewTab(url)
+    }
+
+    func dismissLinkPreview() {
+        linkPreviewShowTask?.cancel()
+        linkPreviewDismissTask?.cancel()
+        isLinkPreviewHovered = false
+        linkPreview?.tearDown()
+        linkPreview = nil
+    }
+
+    private func scheduleLinkPreview(_ request: LinkPreviewRequest, from page: WebPage) {
+        linkPreviewShowTask?.cancel()
+        linkPreviewDismissTask?.cancel()
+        guard linkPreview?.url != request.url else { return }
+        let anchorFrame = windowFrame(of: request.anchorRect, in: page.webView)
+        let delay = Duration.milliseconds(store.settings.linkPreviewDelayMilliseconds)
+        linkPreviewShowTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            self?.showLinkPreview(url: request.url, anchorFrame: anchorFrame)
+        }
+    }
+
+    private func scheduleLinkPreviewDismissal() {
+        linkPreviewShowTask?.cancel()
+        linkPreviewDismissTask?.cancel()
+        guard linkPreview != nil else { return }
+        linkPreviewDismissTask = Task { [weak self] in
+            try? await Task.sleep(for: LifecycleConstants.linkPreviewDismissGrace)
+            guard !Task.isCancelled, self?.isLinkPreviewHovered == false else { return }
+            self?.dismissLinkPreview()
+        }
+    }
+
+    private func showLinkPreview(url: URL, anchorFrame: CGRect) {
+        linkPreview?.tearDown()
+        linkPreview = LinkPreviewState(url: url, anchorFrame: anchorFrame, cardWidth: store.settings.linkPreviewSize.cardSize.width)
+    }
+
+    private func windowFrame(of rect: CGRect, in webView: WKWebView) -> CGRect {
+        let windowRect = webView.convert(rect, to: nil)
+        let contentHeight = window?.contentView?.bounds.height ?? 0
+        return CGRect(x: windowRect.minX, y: contentHeight - windowRect.maxY, width: windowRect.width, height: windowRect.height)
     }
 }

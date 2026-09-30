@@ -48,6 +48,7 @@ enum LifecycleConstants {
     static let saveDebounce: Duration = .milliseconds(800)
     static let suggestionDebounce: Duration = .milliseconds(150)
     static let toastDuration: Duration = .milliseconds(1600)
+    static let linkPreviewDismissGrace: Duration = .milliseconds(300)
     static let maxSplitPanes = 4
     static let maxRecentlyClosed = 30
     static let commandBarResultLimit = 8

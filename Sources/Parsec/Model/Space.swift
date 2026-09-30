@@ -195,6 +195,9 @@ struct BrowserSettings: Codable {
     var autoPictureInPicture = true
     var appIconID = AppIconConstants.defaultID
     var linkOpening = LinkOpeningBehavior.newTab
+    var showsLinkPreviews = true
+    var linkPreviewDelayMilliseconds = 700
+    var linkPreviewSize = LinkPreviewSize.medium
 
     init() {}
 
@@ -251,6 +254,9 @@ struct BrowserSettings: Codable {
         autoPictureInPicture = try container.decodeIfPresent(Bool.self, forKey: .autoPictureInPicture) ?? defaults.autoPictureInPicture
         appIconID = try container.decodeIfPresent(String.self, forKey: .appIconID) ?? defaults.appIconID
         linkOpening = try container.decodeIfPresent(LinkOpeningBehavior.self, forKey: .linkOpening) ?? defaults.linkOpening
+        showsLinkPreviews = try container.decodeIfPresent(Bool.self, forKey: .showsLinkPreviews) ?? defaults.showsLinkPreviews
+        linkPreviewDelayMilliseconds = try container.decodeIfPresent(Int.self, forKey: .linkPreviewDelayMilliseconds) ?? defaults.linkPreviewDelayMilliseconds
+        linkPreviewSize = try container.decodeIfPresent(LinkPreviewSize.self, forKey: .linkPreviewSize) ?? defaults.linkPreviewSize
     }
 }
 

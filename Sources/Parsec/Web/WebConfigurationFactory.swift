@@ -4,6 +4,9 @@ import WebKit
 enum WebConfigurationFactory {
     static let autofillWorld = WKContentWorld.world(name: "parsec-autofill")
     static let autofillHandlerName = "parsecAutofill"
+    static let linkPreviewWorld = WKContentWorld.world(name: "parsec-linkpreview")
+    static let linkPreviewHandlerName = "parsecLinkPreview"
+    private static let linkPreviewResourceName = "linkpreview"
     private static let autofillResourceName = "autofill"
     private static let javaScriptExtension = "js"
     private static let developerExtrasKey = "developerExtrasEnabled"
@@ -14,6 +17,11 @@ enum WebConfigurationFactory {
     private static let privateDataStore = WKWebsiteDataStore.nonPersistent()
     private static let autofillScriptSource: String = {
         guard let url = Bundle.main.url(forResource: autofillResourceName, withExtension: javaScriptExtension) else { return "" }
+        return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+    }()
+
+    private static let linkPreviewScriptSource: String = {
+        guard let url = Bundle.main.url(forResource: linkPreviewResourceName, withExtension: javaScriptExtension) else { return "" }
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }()
 
@@ -71,6 +79,9 @@ enum WebConfigurationFactory {
         let autofillScript = WKUserScript(source: autofillScriptSource, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: autofillWorld)
         controller.addUserScript(autofillScript)
         controller.add(AutofillMessageRouter.shared, contentWorld: autofillWorld, name: autofillHandlerName)
+        let linkPreviewScript = WKUserScript(source: linkPreviewScriptSource, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: linkPreviewWorld)
+        controller.addUserScript(linkPreviewScript)
+        controller.add(LinkPreviewMessageRouter.shared, contentWorld: linkPreviewWorld, name: linkPreviewHandlerName)
         ContentBlocker.shared.install(on: controller, includesBlocker: true)
         return controller
     }
