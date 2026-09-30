@@ -23,11 +23,15 @@ struct SidebarNodeRow: View {
                     ))
                 }
             }
-            .clipped()
+            .mask { Rectangle().padding(.vertical, -SidebarDropMetrics.indicatorOverhang) }
         case .tab, .split:
             TabRow(model: model, node: node, depth: depth)
         }
     }
+}
+
+enum SidebarDropMetrics {
+    static let indicatorOverhang: CGFloat = 6
 }
 
 struct RowBackground: View {
@@ -68,8 +72,8 @@ extension View {
         overlay(alignment: .topLeading) {
             if isVisible {
                 DropIndicator(axis: axis)
-                    .frame(maxWidth: axis == .horizontal ? .infinity : nil, maxHeight: axis == .vertical ? .infinity : nil)
                     .padding(.leading, axis == .horizontal ? leadingInset : 0)
+                    .frame(maxWidth: axis == .horizontal ? .infinity : nil, maxHeight: axis == .vertical ? .infinity : nil, alignment: .topLeading)
                     .offset(x: axis == .vertical ? -5 : 0, y: axis == .horizontal ? -5 : 0)
             }
         }
