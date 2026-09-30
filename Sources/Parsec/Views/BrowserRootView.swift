@@ -20,6 +20,9 @@ struct BrowserRootView: View {
         }
         .background(WindowBackgroundView(theme: model.currentSpace.theme))
         .ignoresSafeArea()
+        .onChange(of: model.isChromeVisible, initial: true) { _, isVisible in
+            (model.window as? BrowserWindow)?.setTrafficLightsVisible(isVisible)
+        }
         .onChange(of: store.settings.layout, initial: true) { _, layout in
             (model.window as? BrowserWindow)?.trafficLightsCenterY = layout == .topTabs ? LayoutConstants.topBarHeight / 2 : SidebarView.trafficLightsCenterY
         }

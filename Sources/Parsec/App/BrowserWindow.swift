@@ -38,6 +38,14 @@ final class BrowserWindow: NSWindow, NSWindowDelegate {
         model.window = self
         center()
         if !model.isPrivate { setFrameAutosaveName(Self.frameAutosaveName) }
+        setTrafficLightsVisible(model.isChromeVisible)
+    }
+
+    func setTrafficLightsVisible(_ isVisible: Bool) {
+        Self.trafficLightButtonTypes.forEach { buttonType in
+            standardWindowButton(buttonType)?.isHidden = !isVisible
+        }
+        layoutTrafficLights()
     }
 
     func layoutTrafficLights() {

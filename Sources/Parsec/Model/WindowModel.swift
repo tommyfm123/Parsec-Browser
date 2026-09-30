@@ -142,6 +142,10 @@ final class WindowModel: WebPageHost {
         CGFloat(store.settings.sidebarWidth)
     }
 
+    var isChromeVisible: Bool {
+        isSidebarPinned || isSidebarHovering
+    }
+
     var visibleNodeIDs: Set<UUID> {
         var identifiers: Set<UUID> = []
         if let selectedNode { identifiers.formUnion([selectedNode.id] + selectedNode.children.map(\.id)) }
