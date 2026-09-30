@@ -133,6 +133,7 @@ struct AssistantRequest {
     let enabledConnectors: [String]
     let resumeSessionID: String?
     let model: String
+    var usesIntegrations = true
 }
 
 @MainActor
@@ -143,6 +144,17 @@ protocol AssistantRun: AnyObject {
 @MainActor
 enum AssistantProviderFactory {
     static func start(_ kind: AssistantProviderKind, request: AssistantRequest, onEvent: @escaping @MainActor (AssistantEvent) -> Void) -> AssistantRun {
+        if request.usesIntegrations && IntegrationStore.shared.hasEnabledServers {
+            return IntegrationAssistantRun(provider: kind, request: request, onEvent: onEvent)
+        }
+        var prepared = request
+        if request.usesIntegrations && !IntegrationStore.shared.skillContext.isEmpty {
+            prepared = AssistantRequest(prompt: request.prompt, history: request.history, attachments: request.attachments, systemPrompt: request.systemPrompt + "\n" + IntegrationStore.shared.skillContext, usesWebSearch: request.usesWebSearch, enabledConnectors: request.enabledConnectors, resumeSessionID: request.resumeSessionID, model: request.model, usesIntegrations: false)
+        }
+        return startBase(kind, request: prepared, onEvent: onEvent)
+    }
+
+    static func startBase(_ kind: AssistantProviderKind, request: AssistantRequest, onEvent: @escaping @MainActor (AssistantEvent) -> Void) -> AssistantRun {
         switch kind {
         case .claudeCode:
             let runner = ClaudeCodeRunner(onEvent: onEvent)

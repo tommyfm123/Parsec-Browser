@@ -97,6 +97,14 @@ Abre **Configuración → IA** y elige un proveedor:
 | Modelos locales | Instalar y abrir Ollama; los modelos se descargan desde Parsec |
 | Personalizado | Una URL base compatible con la API de OpenAI (LM Studio, OpenRouter, Groq…) |
 
+## Plugins y MCPs
+
+En **Configuración → Plugins & MCPs** podés agregar servidores MCP remotos por URL (Streamable HTTP) o locales por comando (stdio). También podés importar el formato JSON `mcpServers`, con `url`, `headers`, `command`, `args` y `env` según el transporte. Usá **Conectar** para verificar el servidor y **Ver herramientas** para revisar lo que ofrece.
+
+Los MCPs activados están disponibles en el chat y en el agente de navegación con cualquier proveedor de IA. Parsec pide confirmación para las herramientas que no se declaran de solo lectura. Los tokens, headers y variables de entorno se guardan en el Llavero; la configuración de servidores queda en `integrations.json`.
+
+La pestaña **Skills** permite importar instrucciones Markdown o carpetas con archivos `SKILL.md`, activarlas y revisar su contenido. Se importan instrucciones; esta versión no instala dependencias ni ejecuta scripts de plugins. La conexión remota admite tokens y headers; el inicio de sesión OAuth automático y el transporte SSE antiguo todavía no están disponibles.
+
 ## Atajos principales
 
 | Atajo | Acción |
@@ -130,6 +138,7 @@ Sources/Parsec
 ├── Web/         WebKit: páginas, navegación, errores y seguridad
 ├── Services/    Historial, favicons, bloqueador, contraseñas, descargas, conversaciones
 ├── Assistant/   Proveedores de IA, agente que navega, panel y modelos
+├── Integrations/ Biblioteca de skills, cliente MCP y credenciales
 └── Views/       Interfaz: sidebar, contenido, inicio, configuración
 Support/         Info.plist, entitlements, ícono y listas de filtros
 scripts/         Build, verificaciones e ícono
@@ -143,7 +152,7 @@ Parsec no tiene servidores ni telemetría. Todo vive en tu Mac:
 - **Contraseñas y API keys:** Llavero de macOS
 - **Cookies y sesiones:** el almacén de WebKit de cada perfil
 
-Solo sale lo que tú le envías al proveedor de IA que elijas.
+Solo sale lo que tú le envías al proveedor de IA que elijas y a los servidores MCP que actives para completar tus pedidos.
 
 ---
 
