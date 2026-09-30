@@ -39,7 +39,7 @@ final class BrowserWindow: NSWindow, NSWindowDelegate {
         delegate = self
         tabbingMode = .disallowed
         minSize = NSSize(width: 640, height: 420)
-        contentView = NSHostingView(rootView: BrowserRootView(model: model))
+        contentView = NSHostingView(rootView: BrowserRootView(model: model).environment(\.allowsFaviconNetwork, !model.isPrivate))
         acceptsMouseMovedEvents = true
         model.window = self
         center()
@@ -80,7 +80,11 @@ final class BrowserWindow: NSWindow, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         model.closePeek()
-        if model.isPrivate { model.currentSpace.today.forEach(BrowserStore.shared.unloadPages) }
+        if model.isPrivate {
+            model.currentSpace.today.forEach(BrowserStore.shared.unloadPages)
+            WebConfigurationFactory.releasePrivateData(profileID: model.profileID)
+        }
+        model.resolvePermission(false)
         onClose?()
     }
 

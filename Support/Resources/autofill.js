@@ -4,6 +4,12 @@
   const PASSWORD_SELECTOR = "input[type=password]";
   const SUBMIT_SELECTOR = "button[type=submit], input[type=submit], button:not([type])";
   let hasReportedForm = false;
+  const documentID = crypto.randomUUID();
+  window.parsecCredentialDocumentID = documentID;
+  const hasSafeDestination = (field) => {
+    const destination = new URL(field.form?.action || location.href, location.href);
+    return location.protocol === "https:" && destination.origin === location.origin;
+  };
 
   const post = (payload) => window.webkit.messageHandlers[HANDLER_NAME].postMessage(payload);
 
@@ -29,19 +35,21 @@
   const reportFormIfPresent = () => {
     if (hasReportedForm || visiblePasswordFields().length === 0) return;
     hasReportedForm = true;
+    formObserver.disconnect();
     post({ type: "formDetected" });
   };
 
   const reportSubmission = () => {
     const passwordField = visiblePasswordFields().find((field) => field.value);
-    if (!passwordField) return;
+    if (!passwordField || !hasSafeDestination(passwordField)) return;
     const usernameField = usernameFieldFor(passwordField);
     post({ type: "submitted", username: usernameField ? usernameField.value : "", password: passwordField.value });
   };
 
-  window.parsecFillCredentials = (username, password) => {
+  window.parsecFillCredentials = (username, password, expectedDocumentID, expectedOrigin) => {
+    if (documentID !== expectedDocumentID || location.origin !== expectedOrigin) return false;
     const passwordField = visiblePasswordFields()[0];
-    if (!passwordField) return false;
+    if (!passwordField || !hasSafeDestination(passwordField)) return false;
     const usernameField = usernameFieldFor(passwordField);
     if (usernameField && username) setFieldValue(usernameField, username);
     setFieldValue(passwordField, password);
@@ -56,6 +64,7 @@
     },
     true
   );
-  new MutationObserver(reportFormIfPresent).observe(document.documentElement, { childList: true, subtree: true });
+  const formObserver = new MutationObserver(reportFormIfPresent);
+  formObserver.observe(document.documentElement, { childList: true, subtree: true });
   reportFormIfPresent();
 })();

@@ -18,6 +18,7 @@ final class DownloadItem: Identifiable {
     var fractionCompleted = 0.0
     var state = State.inProgress
     @ObservationIgnored var progressObservation: NSKeyValueObservation?
+    @ObservationIgnored var isPrivate = false
 
     init(id: UUID = UUID(), filename: String, destinationURL: URL, createdAt: Date = Date(), state: State = .inProgress, fractionCompleted: Double = 0) {
         self.id = id
@@ -33,12 +34,12 @@ final class DownloadItem: Identifiable {
 @Observable
 final class DownloadManager: NSObject, WKDownloadDelegate {
     static let shared = DownloadManager()
-    private static let fallbackFilename = "descarga"
     private static let riskyExtensions: Set<String> = ["app", "pkg", "mpkg", "dmg", "command", "sh", "zsh", "tool", "terminal", "scpt", "workflow", "jar", "exe", "msi", "bat", "iso", "webloc", "fileloc"]
     private static let persistenceURL = StorageConstants.applicationSupportURL.appending(path: "downloads.json")
 
     private(set) var items: [DownloadItem] = []
     @ObservationIgnored private var itemsByDownload: [ObjectIdentifier: DownloadItem] = [:]
+    @ObservationIgnored private var privateDownloads: Set<ObjectIdentifier> = []
 
     override init() {
         super.init()
@@ -54,11 +55,20 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
             ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
     }
 
+    func register(_ download: WKDownload, isPrivate: Bool) {
+        if isPrivate { privateDownloads.insert(ObjectIdentifier(download)) }
+        download.delegate = self
+    }
+
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String, completionHandler: @escaping @MainActor (URL?) -> Void) {
-        let filename = suggestedFilename.isEmpty ? Self.fallbackFilename : suggestedFilename
-        guard confirmIfRisky(filename, source: response.url?.host() ?? "") else { return completionHandler(nil) }
+        let filename = WebSecurityPolicy.downloadFilename(suggestedFilename)
+        guard confirmIfRisky(filename, source: response.url?.host() ?? "") else {
+            privateDownloads.remove(ObjectIdentifier(download))
+            return completionHandler(nil)
+        }
         let destinationURL = uniqueDestination(for: filename)
         let item = DownloadItem(filename: destinationURL.lastPathComponent, destinationURL: destinationURL)
+        item.isPrivate = privateDownloads.contains(ObjectIdentifier(download))
         item.progressObservation = download.progress.observe(\.fractionCompleted) { progress, _ in
             let fraction = progress.fractionCompleted
             Task { @MainActor in item.fractionCompleted = fraction }
@@ -82,6 +92,7 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
     }
 
     func open(_ item: DownloadItem) {
+        guard item.state == .finished else { return }
         NSWorkspace.shared.open(item.destinationURL)
     }
 
@@ -106,32 +117,38 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
         alert.alertStyle = .warning
         alert.messageText = "¿Descargar “\(filename)”?"
         alert.informativeText = "Es una app, instalador o script de \(source). Descárgalo solo si confías en el sitio. macOS lo revisará al abrirlo."
-        alert.addButton(withTitle: "Descargar")
         alert.addButton(withTitle: "Cancelar")
-        return alert.runModal() == .alertFirstButtonReturn
+        alert.addButton(withTitle: "Descargar")
+        return alert.runModal() == .alertSecondButtonReturn
     }
 
-    private func quarantine(_ item: DownloadItem, source: URL?) {
+    private func quarantine(_ item: DownloadItem, source: URL?) throws {
         var properties: [String: Any] = [kLSQuarantineTypeKey as String: kLSQuarantineTypeWebDownload, kLSQuarantineAgentNameKey as String: "Parsec"]
         properties[kLSQuarantineDataURLKey as String] = source
         var fileURL = item.destinationURL
         var values = URLResourceValues()
         values.quarantineProperties = properties
-        try? fileURL.setResourceValues(values)
+        try fileURL.setResourceValues(values)
     }
 
     private func finish(_ download: WKDownload, state: DownloadItem.State) {
+        privateDownloads.remove(ObjectIdentifier(download))
         guard let item = itemsByDownload.removeValue(forKey: ObjectIdentifier(download)) else { return }
-        if state == .finished { quarantine(item, source: download.originalRequest?.url) }
         item.state = state
-        item.fractionCompleted = state == .finished ? 1 : item.fractionCompleted
+        do {
+            if state == .finished { try quarantine(item, source: download.originalRequest?.url) }
+        } catch {
+            item.state = .failed
+            NSApp.presentError(error)
+        }
+        item.fractionCompleted = item.state == .finished ? 1 : item.fractionCompleted
         item.progressObservation = nil
         persistItems()
     }
 
     private func persistItems() {
         do {
-            let records = items.map(StoredDownload.init)
+            let records = items.filter { !$0.isPrivate }.map(StoredDownload.init)
             let data = try JSONEncoder().encode(records)
             try data.write(to: Self.persistenceURL, options: .atomic)
         } catch {
@@ -170,7 +187,8 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
         let fileExtension = (filename as NSString).pathExtension
         var candidate = downloadsURL.appending(path: filename)
         var suffix = 1
-        while FileManager.default.fileExists(atPath: candidate.path) {
+        let reservedURLs = Set(itemsByDownload.values.map(\.destinationURL))
+        while FileManager.default.fileExists(atPath: candidate.path) || reservedURLs.contains(candidate) {
             suffix += 1
             let numberedName = "\(baseName) (\(suffix))" + (fileExtension.isEmpty ? "" : ".\(fileExtension)")
             candidate = downloadsURL.appending(path: numberedName)

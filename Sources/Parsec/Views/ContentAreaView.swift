@@ -213,7 +213,7 @@ struct PaneToolbar: View {
             IconButton(symbolName: "chevron.right", label: "Adelante", isEnabled: page?.canGoForward == true) { page?.webView.goForward() }
             IconButton(symbolName: "arrow.clockwise", label: "Recargar", isEnabled: page != nil) { page?.webView.reload() }
             HStack(spacing: 6) {
-                FaviconView(url: pane.liveURL, size: 13)
+                FaviconView(url: pane.liveURL, size: 13, allowsNetwork: pane.allowsFaviconNetwork)
                 Text(pane.displayHost.isEmpty ? "Nuevo panel" : pane.displayHost)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)

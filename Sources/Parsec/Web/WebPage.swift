@@ -58,7 +58,8 @@ final class WebPage: NSObject {
     private static let usernameKey = "username"
     private static let passwordKey = "password"
     private static let faviconScript = "return document.querySelector(\"link[rel~='icon']\")?.href ?? null;"
-    private static let fillScript = "return window.parsecFillCredentials(username, password);"
+    private static let credentialDocumentScript = "return window.parsecCredentialDocumentID || '';"
+    private static let fillScript = "return window.parsecFillCredentials(username, password, expectedDocumentID, expectedOrigin);"
     private static let cancelledErrorCodes: Set<Int> = [NSURLErrorCancelled, 102]
     private static let middleMouseButtonNumbers: Set<Int> = [2, 4]
 
@@ -82,11 +83,18 @@ final class WebPage: NSObject {
     @ObservationIgnored weak var host: WebPageHost?
     @ObservationIgnored var isAutoPeekSource = false
     @ObservationIgnored private var observations: [NSKeyValueObservation] = []
-    @ObservationIgnored private var upgradedURLs: Set<URL> = []
+    @ObservationIgnored private var pendingUpgradeURL: URL?
     @ObservationIgnored private var allowedHTTPHosts: Set<String> = []
     @ObservationIgnored private var isBlockerApplied = true
+    @ObservationIgnored private var navigationID = UUID()
+    @ObservationIgnored private var pendingHTTPURL: URL?
+    @ObservationIgnored private var hasTerminated = false
+    @ObservationIgnored private var isTornDown = false
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
+    @ObservationIgnored private var errorPageNavigation: WKNavigation?
 
     var isCapturingMedia: Bool { isUsingCamera || isUsingMicrophone }
+    var isEphemeral: Bool { isPrivate || !webView.configuration.websiteDataStore.isPersistent }
     var currentHost: String { currentURL?.host() ?? "" }
 
     static func page(for webView: WKWebView) -> WebPage? {
@@ -109,8 +117,7 @@ final class WebPage: NSObject {
     }
 
     func load(_ url: URL) {
-        guard url.isFileURL else { return loadRequest(url) }
-        webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+        scheduleLoad(url)
     }
 
     func applyBlockerRules() {
@@ -118,6 +125,9 @@ final class WebPage: NSObject {
     }
 
     func tearDown() {
+        isTornDown = true
+        loadTask?.cancel()
+        navigationID = UUID()
         webView.stopLoading()
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
@@ -127,20 +137,30 @@ final class WebPage: NSObject {
     }
 
     func fill(_ credential: SavedCredential) async throws {
+        guard !isTornDown, !webView.isLoading, let url = webView.url, let origin = WebOrigin(url: url),
+              origin.allowsCredentials, credential.matches(host: origin.host) else { throw PasswordVaultError.unsafePage }
+        let expectedNavigationID = navigationID
+        let documentID = try await webView.callAsyncJavaScript(Self.credentialDocumentScript, arguments: [:], in: nil, contentWorld: WebConfigurationFactory.autofillWorld) as? String
+        guard let documentID, !documentID.isEmpty, navigationID == expectedNavigationID else { throw PasswordVaultError.unsafePage }
         let password = try await PasswordVault.shared.authenticatedPassword(for: credential)
-        _ = try await webView.callAsyncJavaScript(
+        guard !isTornDown, !webView.isLoading, navigationID == expectedNavigationID,
+              webView.url.flatMap(WebOrigin.init(url:)) == origin else { throw PasswordVaultError.unsafePage }
+        let didFill = try await webView.callAsyncJavaScript(
             Self.fillScript,
-            arguments: [Self.usernameKey: credential.account, Self.passwordKey: password],
+            arguments: [Self.usernameKey: credential.account, Self.passwordKey: password, "expectedDocumentID": documentID, "expectedOrigin": origin.javascriptOrigin],
             in: nil,
             contentWorld: WebConfigurationFactory.autofillWorld
-        )
+        ) as? Bool
+        guard let didFill, didFill else { throw PasswordVaultError.unsafePage }
     }
 
-    func handleAutofillMessage(_ body: Any, originHost: String) {
+    func handleAutofillMessage(_ body: Any, origin: WebOrigin) {
         guard let payload = body as? [String: Any],
               let rawType = payload[Self.messageTypeKey] as? String,
               let messageType = AutofillMessageType(rawValue: rawType),
-              originHost == currentHost else { return }
+              !isTornDown, origin.allowsCredentials,
+              webView.url.flatMap(WebOrigin.init(url:)) == origin else { return }
+        let originHost = origin.host
         switch messageType {
         case .formDetected:
             hasSavedCredentials = !PasswordVault.shared.credentials(forHost: originHost).isEmpty
@@ -148,13 +168,33 @@ final class WebPage: NSObject {
         case .submitted:
             let username = payload[Self.usernameKey] as? String ?? ""
             let password = payload[Self.passwordKey] as? String ?? ""
-            guard !isPrivate, !password.isEmpty else { return }
+            guard !isEphemeral, !password.isEmpty else { return }
             host?.offerPasswordSave(host: originHost, username: username, password: password)
         }
     }
 
     private func loadRequest(_ url: URL) {
-        webView.load(URLRequest(url: url))
+        scheduleLoad(url)
+    }
+
+    private func scheduleLoad(_ url: URL) {
+        guard !isTornDown else { return }
+        loadTask?.cancel()
+        hasTerminated = false
+        loadTask = Task { [weak self] in
+            let isProtectionReady = await ContentBlocker.shared.waitUntilPrepared()
+            guard let self, !Task.isCancelled, !isTornDown else { return }
+            guard isProtectionReady else {
+                showErrorPage(ErrorPages.loadFailure(for: url, message: "No se pudo iniciar la protección de sitios. Reiniciá Parsec o volvé a compilar la app con sus recursos."), for: url)
+                return
+            }
+            applyBlockerRules()
+            if url.isFileURL {
+                webView.loadFileURL(url, allowingReadAccessTo: url)
+                return
+            }
+            webView.load(URLRequest(url: url))
+        }
     }
 
     private func observeWebView() {
@@ -193,7 +233,9 @@ final class WebPage: NSObject {
 
     private func continueOverHTTP(_ continueURL: URL) {
         let originalString = continueURL.absoluteString.dropFirst(WebConstants.httpContinueScheme.count + 1)
-        guard let originalURL = URL(string: String(originalString)), let host = originalURL.host() else { return }
+        guard let originalURL = URL(string: String(originalString)), originalURL == pendingHTTPURL,
+              originalURL.scheme == WebConstants.httpScheme, let host = originalURL.host() else { return }
+        pendingHTTPURL = nil
         allowedHTTPHosts.insert(host)
         loadRequest(originalURL)
     }
@@ -217,21 +259,22 @@ final class WebPage: NSObject {
     }
 
     private func recordVisit() {
-        guard !isPrivate, let url = currentURL, url.scheme?.hasPrefix(WebConstants.httpScheme) == true else { return }
+        guard !isEphemeral, let url = currentURL, WebSecurityPolicy.isWebURL(url) else { return }
         BrowserStore.shared.history.recordVisit(profileID: profileID, url: url, title: title)
     }
 
     private func refreshFavicon() {
-        guard let pageHost = currentURL?.host() else { return }
+        guard !isEphemeral, let pageURL = webView.url, let pageHost = pageURL.host() else { return }
         Task {
             let result = try? await webView.callAsyncJavaScript(Self.faviconScript, arguments: [:], in: nil, contentWorld: .defaultClient)
-            guard let href = result as? String, let iconURL = URL(string: href) else { return }
+            guard webView.url == pageURL, let href = result as? String, let iconURL = URL(string: href),
+                  WebSecurityPolicy.isWebURL(iconURL) else { return }
             FaviconStore.shared.updateIcon(host: pageHost, iconURL: iconURL)
         }
     }
 
     private func showErrorPage(_ html: String, for url: URL) {
-        webView.loadHTMLString(html, baseURL: nil)
+        errorPageNavigation = webView.loadHTMLString(html, baseURL: nil)
         currentURL = url
     }
 }
@@ -243,19 +286,24 @@ extension WebPage: WKNavigationDelegate {
     }
 
     private func policy(for action: WKNavigationAction) -> WKNavigationActionPolicy {
-        if action.shouldPerformDownload { return .download }
-        guard let url = action.request.url else { return .allow }
+        guard let url = action.request.url else { return .cancel }
         if url.scheme == WebConstants.httpContinueScheme {
-            continueOverHTTP(url)
+            if action.navigationType == .linkActivated, action.targetFrame?.isMainFrame == true,
+               action.sourceFrame.securityOrigin.host.isEmpty { continueOverHTTP(url) }
             return .cancel
         }
-        guard action.targetFrame?.isMainFrame == true else { return .allow }
+        let isRemoteSource = !action.sourceFrame.securityOrigin.host.isEmpty
+        if isRemoteSource, url.isFileURL { return .cancel }
+        guard WebSecurityPolicy.isWebURL(url) || url.isFileURL || url.scheme == "about" || url.scheme == "data" || url.scheme == "blob" else { return .cancel }
         if let blockedHost = url.host(), BrowserStore.shared.settings.isBlocked(host: blockedHost) {
-            showErrorPage(ErrorPages.blockedSite(host: blockedHost), for: url)
+            if action.targetFrame?.isMainFrame == true { showErrorPage(ErrorPages.blockedSite(host: blockedHost), for: url) }
             return .cancel
         }
+        if action.shouldPerformDownload { return .download }
+        guard action.targetFrame?.isMainFrame == true else { return .allow }
+        if action.targetFrame?.isMainFrame == true, WebSecurityPolicy.isWebURL(url) { pendingHTTPURL = nil }
         if let secureURL = upgradedURL(for: url) {
-            upgradedURLs.insert(secureURL)
+            pendingUpgradeURL = secureURL
             loadRequest(secureURL)
             return .cancel
         }
@@ -277,19 +325,28 @@ extension WebPage: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
-        download.delegate = DownloadManager.shared
+        DownloadManager.shared.register(download, isPrivate: isEphemeral)
     }
 
     func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
-        download.delegate = DownloadManager.shared
+        DownloadManager.shared.register(download, isPrivate: isEphemeral)
+    }
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        if navigation !== errorPageNavigation { pendingHTTPURL = nil }
+        navigationID = UUID()
+        hasCommittedNavigation = false
+        hasSavedCredentials = false
     }
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        navigationID = UUID()
         hasCommittedNavigation = true
         hasSavedCredentials = false
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        pendingUpgradeURL = nil
         recordVisit()
         refreshFavicon()
         BrowserStore.shared.pageDidFinishNavigation(self)
@@ -300,12 +357,25 @@ extension WebPage: WKNavigationDelegate {
         guard !Self.cancelledErrorCodes.contains(nsError.code) else { return }
         let failingURL = (nsError.userInfo[NSURLErrorFailingURLErrorKey] as? URL) ?? webView.url
         guard let failingURL else { return }
-        let isFailedUpgrade = upgradedURLs.contains(failingURL)
+        let isFailedUpgrade = pendingUpgradeURL == failingURL
+        if isFailedUpgrade {
+            pendingUpgradeURL = nil
+            var components = URLComponents(url: failingURL, resolvingAgainstBaseURL: false)
+            components?.scheme = WebConstants.httpScheme
+            pendingHTTPURL = components?.url
+        }
         let html = isFailedUpgrade ? ErrorPages.insecureConnection(for: failingURL) : ErrorPages.loadFailure(for: failingURL, message: nsError.localizedDescription)
         showErrorPage(html, for: failingURL)
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        guard !isTornDown, !hasTerminated else { return }
+        hasTerminated = true
+        guard let node, node.page === self else { return }
+        guard BrowserStore.shared.visibleNodeIDs().contains(node.id) else {
+            BrowserStore.shared.unloadPage(node)
+            return
+        }
         webView.reload()
     }
 }
@@ -323,10 +393,15 @@ extension WebPage: WKUIDelegate {
     }
 
     func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping @MainActor (WKPermissionDecision) -> Void) {
-        guard let host else { return decisionHandler(.deny) }
+        guard let host, frame.isMainFrame, let requestOrigin = WebOrigin(securityOrigin: origin),
+              let frameOrigin = WebOrigin(securityOrigin: frame.securityOrigin), requestOrigin == frameOrigin,
+              let pageURL = webView.url, WebSecurityPolicy.isSecureEndpoint(pageURL),
+              WebOrigin(url: pageURL) == requestOrigin else { return decisionHandler(.deny) }
+        let expectedNavigationID = navigationID
         Task {
-            let isGranted = await host.requestPermission(host: origin.host, kind: PermissionKind(type), page: self)
-            decisionHandler(isGranted ? .grant : .deny)
+            let isGranted = await host.requestPermission(host: requestOrigin.identifier, kind: PermissionKind(type), page: self)
+            let isCurrent = !isTornDown && navigationID == expectedNavigationID && webView.url.flatMap(WebOrigin.init(url:)) == requestOrigin
+            decisionHandler(isGranted && isCurrent ? .grant : .deny)
         }
     }
 

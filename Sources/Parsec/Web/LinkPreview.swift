@@ -43,6 +43,8 @@ final class LinkPreviewLoader: NSObject, WKNavigationDelegate {
     private var hasCommitted = false
 
     func load(_ url: URL, in webView: WKWebView, timeout: Duration) async -> Bool {
+        let isProtectionReady = await ContentBlocker.shared.waitUntilPrepared()
+        guard isProtectionReady, !Task.isCancelled else { return false }
         webView.navigationDelegate = self
         webView.load(URLRequest(url: url))
         let timeoutTask = Task { [weak self] in

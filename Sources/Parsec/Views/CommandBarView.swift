@@ -253,7 +253,7 @@ struct PeekView: View {
                     .onTapGesture { model.closePeek() }
                 VStack(spacing: 0) {
                     HStack(spacing: 8) {
-                        FaviconView(url: node.liveURL, size: 14)
+                        FaviconView(url: node.liveURL, size: 14, allowsNetwork: node.allowsFaviconNetwork)
                         Text(node.page?.title.isEmpty == false ? node.displayTitle : node.displayHost)
                             .font(.system(size: 12, weight: .medium))
                             .lineLimit(1)

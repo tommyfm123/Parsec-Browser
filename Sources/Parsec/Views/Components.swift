@@ -144,14 +144,27 @@ struct SpaceBackgroundView: View {
     }
 }
 
+private struct FaviconNetworkKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    var allowsFaviconNetwork: Bool {
+        get { self[FaviconNetworkKey.self] }
+        set { self[FaviconNetworkKey.self] = newValue }
+    }
+}
+
 struct FaviconView: View {
     let url: URL?
     var size: CGFloat = 16
     var isDimmed = false
+    var allowsNetwork = true
+    @Environment(\.allowsFaviconNetwork) private var environmentAllowsNetwork
 
     var body: some View {
         Group {
-            if let icon = FaviconStore.shared.icon(for: url) {
+            if let icon = FaviconStore.shared.icon(for: url, allowsNetwork: allowsNetwork && environmentAllowsNetwork) {
                 Image(nsImage: icon).resizable().interpolation(.high)
             } else if url == nil, let mark = BrandMark.image {
                 Image(nsImage: mark).resizable().renderingMode(.template).interpolation(.high).foregroundStyle(.primary)

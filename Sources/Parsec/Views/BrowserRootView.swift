@@ -165,7 +165,7 @@ struct TopTabsBar: View {
                 TopBarDivider()
                 ForEach(model.favorites.prefix(Self.favoriteLimit)) { node in
                     Button { model.select(node) } label: {
-                        FaviconView(url: node.liveURL, size: 15)
+                        FaviconView(url: node.liveURL, size: 15, allowsNetwork: node.allowsFaviconNetwork)
                             .frame(width: Self.controlHeight, height: Self.controlHeight)
                             .contentShape(Rectangle())
                     }
@@ -314,7 +314,7 @@ struct TopTabChip: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            FaviconView(url: node.liveURL ?? node.children.first?.liveURL, size: 14)
+            FaviconView(url: node.liveURL ?? node.children.first?.liveURL, size: 14, allowsNetwork: node.allowsFaviconNetwork)
             if model.renamingNodeID == node.id {
                 InlineRenameField(initialText: node.displayTitle, font: .system(size: 12, weight: .medium)) { model.finishRenaming(node, with: $0) }
             } else {

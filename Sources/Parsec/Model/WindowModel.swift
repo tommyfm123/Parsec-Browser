@@ -199,7 +199,8 @@ extension WindowModel {
 
     @discardableResult
     func loadPage(for node: SidebarNode, configuration: WKWebViewConfiguration? = nil) -> WebPage {
-        let page = store.ensurePage(for: node, profileID: profileID, isPrivate: isPrivate, configuration: configuration)
+        let pageProfileID = isPrivate ? profileID : store.profileID(forNode: node.id) ?? profileID
+        let page = store.ensurePage(for: node, profileID: pageProfileID, isPrivate: isPrivate, configuration: configuration)
         page.host = self
         return page
     }
@@ -241,12 +242,14 @@ extension WindowModel {
             _ = openInNewTab(url)
         case .navigateCurrent:
             guard let activeTab else { return _ = openInNewTab(url) }
+            let page = loadPage(for: activeTab)
             if activeTab.url == nil { activeTab.url = url }
-            loadPage(for: activeTab).load(url)
+            page.load(url)
         case .navigate(let nodeID):
             guard let node = store.node(nodeID) ?? currentSpace.today.find(nodeID) else { return _ = openInNewTab(url) }
+            let page = loadPage(for: node)
             if node.url == nil { node.url = url }
-            loadPage(for: node).load(url)
+            page.load(url)
         }
     }
 
@@ -695,11 +698,11 @@ extension WindowModel {
 
 extension WindowModel {
     func openNewTab(from page: WebPage, url: URL?, configuration: WKWebViewConfiguration?, inBackground: Bool) -> WKWebView? {
-        let sourceSpace = spaces.first { space in page.node.map { space.allNodes.find($0.id) != nil } ?? false } ?? currentSpace
+        let sourceSpace = spaces.first { space in page.node.map { space.allNodes.find($0.id) != nil } ?? false }
+            ?? spaces.first { $0.profileID == page.profileID } ?? currentSpace
         let node = SidebarNode.tab(url: url)
         insertToday(node, in: sourceSpace)
         let newPage = loadPage(for: node, configuration: configuration)
-        if configuration == nil, let url { newPage.load(url) }
         if !inBackground { reveal(node) }
         return newPage.webView
     }

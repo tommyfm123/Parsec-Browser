@@ -304,7 +304,7 @@ struct FavoriteTile: View {
     private var isSelected: Bool { model.currentSpace.selectedNodeID == node.id }
 
     var body: some View {
-        FaviconView(url: node.liveURL ?? node.children.first?.liveURL, size: 18)
+        FaviconView(url: node.liveURL ?? node.children.first?.liveURL, size: 18, allowsNetwork: node.allowsFaviconNetwork)
             .frame(maxWidth: .infinity)
             .frame(height: 40)
             .background(

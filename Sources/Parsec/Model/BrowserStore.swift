@@ -354,14 +354,23 @@ extension BrowserStore {
     }
 
     func permissions(profileID: UUID, host: String) -> [(kind: PermissionKind, isGranted: Bool)] {
-        [PermissionKind.camera, .microphone, .cameraAndMicrophone].compactMap { kind in
-            permissionDecision(profileID: profileID, host: host, kind: kind).map { (kind, $0) }
+        settings.sitePermissions.compactMap { key, decision in
+            let parts = key.components(separatedBy: Self.permissionKeySeparator)
+            guard parts.count == 3, parts[0] == profileID.uuidString,
+                  Self.permissionHost(parts[1]) == host, let kind = PermissionKind(rawValue: parts[2]) else { return nil }
+            return (kind, decision)
         }
     }
 
+    private static func permissionHost(_ origin: String) -> String {
+        URL(string: origin)?.host ?? origin
+    }
+
     func resetPermissions(profileID: UUID, host: String) {
-        let prefix = profileID.uuidString + Self.permissionKeySeparator + host + Self.permissionKeySeparator
-        settings.sitePermissions = settings.sitePermissions.filter { !$0.key.hasPrefix(prefix) }
+        settings.sitePermissions = settings.sitePermissions.filter { key, _ in
+            let parts = key.components(separatedBy: Self.permissionKeySeparator)
+            return parts.count != 3 || parts[0] != profileID.uuidString || Self.permissionHost(parts[1]) != host
+        }
         saveSoon()
     }
 
@@ -387,7 +396,8 @@ extension BrowserStore {
 extension BrowserStore {
     @discardableResult
     func ensurePage(for node: SidebarNode, profileID: UUID, isPrivate: Bool, configuration: WKWebViewConfiguration? = nil) -> WebPage {
-        if let existing = node.page { return existing }
+        if let existing = node.page, existing.profileID == profileID, existing.isPrivate == isPrivate { return existing }
+        if node.page != nil { unloadPage(node) }
         let page = WebPage(profileID: profileID, isPrivate: isPrivate, configuration: configuration)
         page.node = node
         page.isAutoPeekSource = isPinnedOrFavorite(node.id)
@@ -428,9 +438,6 @@ extension BrowserStore {
         }
         source.resume()
         memoryPressureSource = source
-        ContentBlocker.shared.observe { _ in
-            BrowserStore.shared.allTabNodes.compactMap(\.page).forEach { $0.applyBlockerRules() }
-        }
     }
 
     func runLifecycleTick() {
@@ -453,13 +460,21 @@ extension BrowserStore {
     }
 
     private func suspendIfIdle(_ node: SidebarNode) {
-        guard let page = node.page, !page.isCapturingMedia else { return }
-        page.webView.requestMediaPlaybackState { state in
-            Task { @MainActor in
-                guard state != .playing else { return }
-                BrowserStore.shared.unloadPage(node)
-            }
+        guard let page = node.page, !page.isCapturingMedia, !page.isLoading, page.agentActivity == nil else { return }
+        let lastActiveAt = node.lastActiveAt
+        Task { [weak node, weak page] in
+            guard let node, let page, await isIdle(page), node.page === page, node.lastActiveAt == lastActiveAt,
+                  !visibleNodeIDs().contains(node.id) else { return }
+            unloadPage(node)
         }
+    }
+
+    private func isIdle(_ page: WebPage) async -> Bool {
+        guard !page.isCapturingMedia, !page.isLoading, page.agentActivity == nil else { return false }
+        let state = await withCheckedContinuation { continuation in
+            page.webView.requestMediaPlaybackState { continuation.resume(returning: $0) }
+        }
+        return state != .playing && !page.isCapturingMedia && !page.isLoading && page.agentActivity == nil
     }
 
     private func archiveStaleTodayTabs(visibleIDs: Set<UUID>, now: Date) {
@@ -472,10 +487,24 @@ extension BrowserStore {
                 return isStale && !isVisible && !isPlaying
             }
             guard !staleNodes.isEmpty else { continue }
-            staleNodes.forEach(unloadPages)
-            let staleIDs = Set(staleNodes.map(\.id))
-            space.today.removeAll { staleIDs.contains($0.id) }
-            saveSoon()
+            for node in staleNodes {
+                let lastActiveAt = node.lastActiveAt
+                Task { [weak node, weak space] in
+                    guard let node, let space else { return }
+                    let pages = node.allTabs.compactMap(\.page)
+                    for page in pages {
+                        guard await isIdle(page) else { return }
+                    }
+                    let currentIDs = visibleNodeIDs()
+                    let isVisible = currentIDs.contains(node.id) || node.allTabs.contains { currentIDs.contains($0.id) }
+                    let hasChangedPages = node.allTabs.compactMap(\.page).contains { current in !pages.contains { $0 === current } }
+                    guard node.lastActiveAt == lastActiveAt, !isVisible, !hasChangedPages,
+                          space.today.contains(where: { $0 === node }) else { return }
+                    unloadPages(in: node)
+                    space.today.removeAll { $0 === node }
+                    saveSoon()
+                }
+            }
         }
     }
 }
