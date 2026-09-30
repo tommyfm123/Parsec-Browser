@@ -73,6 +73,7 @@ final class WindowModel: WebPageHost {
     var pageConversations: [UUID: AssistantModel] = [:]
     var isHistoryPresented = false
     var linkPreview: LinkPreviewState?
+    var newSpacePullProgress: CGFloat = 0
     @ObservationIgnored private var previousSelectionID: UUID?
     @ObservationIgnored private var pendingReveals: [RevealEdge: Task<Void, Never>] = [:]
     @ObservationIgnored private var linkPreviewShowTask: Task<Void, Never>?

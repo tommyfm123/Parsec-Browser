@@ -18,6 +18,7 @@ struct SidebarView: View {
             AddressBar(model: model)
             if !model.isPrivate {
                 FavoritesGrid(model: model)
+                    .opacity(1 - model.newSpacePullProgress)
             }
             SpacePager(model: model)
             SidebarFooter(model: model)

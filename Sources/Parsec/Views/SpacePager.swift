@@ -4,7 +4,6 @@ import SwiftUI
 struct SpacePager: View {
     @Bindable var model: WindowModel
     @ViewState private var dragOffset: CGFloat = 0
-    @ViewState private var newSpaceProgress: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isOnLastSpace: Bool { model.currentSpaceIndex == model.spaces.count - 1 }
@@ -30,7 +29,7 @@ struct SpacePager: View {
             .frame(width: pageWidth, alignment: .leading)
             .background(SwipeMonitor(onChange: { trackSwipe($0, width: pageWidth) }, onEnd: { finishSwipe($0, width: pageWidth) }))
             .overlay(alignment: .center) {
-                NewSpaceSwipeIndicator(progress: newSpaceProgress)
+                NewSpaceSwipeIndicator(progress: model.newSpacePullProgress)
             }
         }
         .clipped()
@@ -39,7 +38,7 @@ struct SpacePager: View {
     private func trackSwipe(_ offset: CGFloat, width: CGFloat) {
         dragOffset = rubberBand(offset, width: width)
         let isPullingPastEnd = isOnLastSpace && offset < 0 && !model.isPrivate
-        newSpaceProgress = isPullingPastEnd ? min(-offset / (width * LayoutConstants.newSpaceSwipeThreshold), 1) : 0
+        model.newSpacePullProgress = isPullingPastEnd ? min(-offset / (width * LayoutConstants.newSpaceSwipeThreshold), 1) : 0
     }
 
     private func rubberBand(_ offset: CGFloat, width: CGFloat) -> CGFloat {
@@ -49,8 +48,8 @@ struct SpacePager: View {
     }
 
     private func finishSwipe(_ offset: CGFloat, width: CGFloat) {
-        let shouldCreateSpace = newSpaceProgress >= 1
-        newSpaceProgress = 0
+        let shouldCreateSpace = model.newSpacePullProgress >= 1
+        model.newSpacePullProgress = 0
         if shouldCreateSpace {
             withAnimation(Motion.spring(reduceMotion: reduceMotion)) { dragOffset = 0 }
             return model.isNewSpacePresented = true
@@ -65,32 +64,37 @@ struct SpacePager: View {
 }
 
 struct NewSpaceSwipeIndicator: View {
-    private static let diameter: CGFloat = 56
+    private static let diameter: CGFloat = 60
     private static let ringWidth: CGFloat = 4
+    private static let ringInset: CGFloat = 2
 
     let progress: CGFloat
 
     private var isReady: Bool { progress >= 1 }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             ZStack {
                 Circle().fill(.regularMaterial)
-                Circle().stroke(Color.primary.opacity(0.18), lineWidth: Self.ringWidth)
+                Circle()
+                    .fill(Color.primary.opacity(0.14))
+                    .scaleEffect(progress)
+                Circle().stroke(Color.primary.opacity(0.2), lineWidth: Self.ringWidth)
                 Circle()
                     .trim(from: 0, to: progress)
-                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: Self.ringWidth, lineCap: .round))
+                    .stroke(Color.primary.opacity(0.85), style: StrokeStyle(lineWidth: Self.ringWidth, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                Image(systemName: "plus")
+                Image(systemName: isReady ? "checkmark" : "plus")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(isReady ? Color.accentColor : Color.secondary)
+                    .foregroundStyle(Color.primary.opacity(0.3 + 0.6 * progress))
             }
+            .frame(width: Self.diameter - Self.ringInset, height: Self.diameter - Self.ringInset)
             .frame(width: Self.diameter, height: Self.diameter)
             Text(isReady ? "Suelta para crear" : "Sigue empujando")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
         }
-        .scaleEffect(0.7 + 0.3 * progress)
+        .scaleEffect(0.75 + 0.25 * progress)
         .opacity(progress > 0 ? 1 : 0)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
