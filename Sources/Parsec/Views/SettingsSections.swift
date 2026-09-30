@@ -1065,6 +1065,7 @@ struct DocumentSettings: View {
 
 struct AdvancedSettings: View {
     private static let suspendOptions = [1, 5, 10, 15, 60, 0]
+    private static let revealDelayOptions = [0, 100, 200, 350, 500]
 
     private static func suspendLabel(_ minutes: Int) -> String {
         switch minutes {
@@ -1088,6 +1089,9 @@ struct AdvancedSettings: View {
     var body: some View {
         SettingsGroup {
             SettingsToggle(symbolName: "speaker.wave.2.fill", tint: .blue, title: "Sonidos de Parsec", isOn: SettingsBinding.make(\.playsSounds))
+            SettingsItem(symbolName: "sidebar.squares.left", tint: .orange, title: "Retraso al abrir los paneles", detail: "Tiempo que el cursor debe quedarse en el borde para mostrar el sidebar o el panel de IA.") {
+                ParsecSelect(selection: SettingsBinding.make(\.edgeRevealDelayMilliseconds), options: Self.revealDelayOptions.map { ($0, $0 == 0 ? "Inmediato" : "\($0) ms") }, width: 120)
+            }
             SettingsToggle(symbolName: "link", tint: .gray, title: "Mostrar la URL completa", detail: "En la barra de dirección, en lugar del dominio.", isOn: SettingsBinding.make(\.showsFullURL))
         }
         SettingsGroup {

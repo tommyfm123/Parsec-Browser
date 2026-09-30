@@ -22,6 +22,11 @@ struct PeekState: Identifiable {
     let node: SidebarNode
 }
 
+enum RevealEdge {
+    case sidebar
+    case assistant
+}
+
 enum CommandBarMode: Equatable {
     case newTab
     case navigateCurrent
@@ -68,6 +73,7 @@ final class WindowModel: WebPageHost {
     var pageConversations: [UUID: AssistantModel] = [:]
     var isHistoryPresented = false
     @ObservationIgnored private var previousSelectionID: UUID?
+    @ObservationIgnored private var pendingReveals: [RevealEdge: Task<Void, Never>] = [:]
 
     init(isPrivate: Bool = false) {
         self.isPrivate = isPrivate
@@ -517,14 +523,49 @@ extension WindowModel {
             let usesSidebar = store.settings.layout == .sidebar
             let pointerDistance = usesSidebar ? location.x : (window?.contentView?.bounds.height ?? 0) - location.y
             let chromeExtent = usesSidebar ? sidebarWidth + SidebarViewMetrics.outerInset : LayoutConstants.topBarHeight
-            if pointerDistance <= revealDistance, !isSidebarHovering { isSidebarHovering = true }
+            if pointerDistance <= revealDistance { scheduleReveal(.sidebar) } else { cancelReveal(.sidebar) }
             if isSidebarHovering, pointerDistance > chromeExtent + dismissMargin, !isOverlayOpen { isSidebarHovering = false }
         }
         guard !isAssistantPresented else { return }
         let distanceFromRight = windowWidth - location.x
-        if distanceFromRight <= revealDistance, !isAssistantHovering, !isShowingStartPage { isAssistantHovering = true }
+        if distanceFromRight <= revealDistance, !isShowingStartPage { scheduleReveal(.assistant) } else { cancelReveal(.assistant) }
         let assistantEdge = AssistantPanelMetrics.width + SidebarViewMetrics.outerInset * 2 + dismissMargin
         if isAssistantHovering, distanceFromRight > assistantEdge, !isOverlayOpen { isAssistantHovering = false }
+    }
+
+    func scheduleReveal(_ edge: RevealEdge) {
+        guard pendingReveals[edge] == nil, !isRevealed(edge) else { return }
+        let delay = store.settings.edgeRevealDelayMilliseconds
+        guard delay > 0 else { return reveal(edge) }
+        pendingReveals[edge] = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(delay))
+            guard !Task.isCancelled else { return }
+            self?.reveal(edge)
+        }
+    }
+
+    func cancelReveal(_ edge: RevealEdge) {
+        pendingReveals[edge]?.cancel()
+        pendingReveals[edge] = nil
+    }
+
+    func updateReveal(_ edge: RevealEdge, isPointerInside: Bool) {
+        if isPointerInside { scheduleReveal(edge) } else { cancelReveal(edge) }
+    }
+
+    private func isRevealed(_ edge: RevealEdge) -> Bool {
+        switch edge {
+        case .sidebar: isSidebarHovering
+        case .assistant: isAssistantHovering
+        }
+    }
+
+    private func reveal(_ edge: RevealEdge) {
+        pendingReveals[edge] = nil
+        switch edge {
+        case .sidebar: isSidebarHovering = true
+        case .assistant: isAssistantHovering = true
+        }
     }
 
     var assistant: AssistantModel {

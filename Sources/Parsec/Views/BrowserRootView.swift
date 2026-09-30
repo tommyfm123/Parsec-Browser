@@ -53,9 +53,7 @@ struct SidebarLayoutView: View {
                     .frame(width: LayoutConstants.hoverEdgeWidth)
                     .frame(maxHeight: .infinity)
                     .contentShape(Rectangle())
-                    .onHover { isInside in
-                        if isInside { model.isSidebarHovering = true }
-                    }
+                    .onHover { model.updateReveal(.sidebar, isPointerInside: $0) }
                 SidebarView(model: model, isFloating: true)
                     .padding(Self.inset)
                     .offset(x: model.isSidebarHovering ? 0 : -(model.sidebarWidth + 48))
@@ -86,9 +84,7 @@ struct AssistantEdge: View {
                     .frame(width: LayoutConstants.hoverEdgeWidth)
                     .frame(maxHeight: .infinity)
                     .contentShape(Rectangle())
-                    .onHover { isInside in
-                        if isInside { model.isAssistantHovering = true }
-                    }
+                    .onHover { model.updateReveal(.assistant, isPointerInside: $0) }
                 AssistantPanelView(model: model, assistant: model.assistant, isFloating: true)
                     .padding(SidebarView.outerInset)
                     .offset(x: model.isAssistantHovering ? 0 : AssistantPanelView.width + 48)
@@ -119,9 +115,7 @@ struct TopTabsLayoutView: View {
                     .frame(height: LayoutConstants.hoverEdgeWidth)
                     .frame(maxWidth: .infinity)
                     .contentShape(Rectangle())
-                    .onHover { isInside in
-                        if isInside { model.isSidebarHovering = true }
-                    }
+                    .onHover { model.updateReveal(.sidebar, isPointerInside: $0) }
                 TopTabsBar(model: model)
                     .shadow(color: .black.opacity(0.2), radius: 16, y: 4)
                     .offset(y: model.isSidebarHovering ? 0 : -(LayoutConstants.topBarHeight + 24))

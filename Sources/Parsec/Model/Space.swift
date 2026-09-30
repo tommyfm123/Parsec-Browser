@@ -177,6 +177,7 @@ struct BrowserSettings: Codable {
     var commandBarShowsRecentTabs = true
     var commandBarShowsConversations = true
     var agentUsesSessions = false
+    var edgeRevealDelayMilliseconds = 200
 
     init() {}
 
@@ -227,6 +228,7 @@ struct BrowserSettings: Codable {
         commandBarShowsRecentTabs = try container.decodeIfPresent(Bool.self, forKey: .commandBarShowsRecentTabs) ?? defaults.commandBarShowsRecentTabs
         commandBarShowsConversations = try container.decodeIfPresent(Bool.self, forKey: .commandBarShowsConversations) ?? defaults.commandBarShowsConversations
         agentUsesSessions = try container.decodeIfPresent(Bool.self, forKey: .agentUsesSessions) ?? defaults.agentUsesSessions
+        edgeRevealDelayMilliseconds = try container.decodeIfPresent(Int.self, forKey: .edgeRevealDelayMilliseconds) ?? defaults.edgeRevealDelayMilliseconds
     }
 }
 
