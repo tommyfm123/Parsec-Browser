@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.visibleNodeIDs = { [weak self] in self?.visibleNodeIDs() ?? [] }
         store.startLifecycle()
         NSApp.mainMenu = MainMenu.build()
+        AppIconCatalog.applySelected()
         #if DEBUG
         DebugBridge.start()
         #endif

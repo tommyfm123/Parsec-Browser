@@ -181,6 +181,7 @@ struct BrowserSettings: Codable {
     var confirmsBeforeQuit = false
     var restoresPreviousSession = true
     var autoPictureInPicture = true
+    var appIconID = AppIconConstants.defaultID
 
     init() {}
 
@@ -235,6 +236,7 @@ struct BrowserSettings: Codable {
         confirmsBeforeQuit = try container.decodeIfPresent(Bool.self, forKey: .confirmsBeforeQuit) ?? defaults.confirmsBeforeQuit
         restoresPreviousSession = try container.decodeIfPresent(Bool.self, forKey: .restoresPreviousSession) ?? defaults.restoresPreviousSession
         autoPictureInPicture = try container.decodeIfPresent(Bool.self, forKey: .autoPictureInPicture) ?? defaults.autoPictureInPicture
+        appIconID = try container.decodeIfPresent(String.self, forKey: .appIconID) ?? defaults.appIconID
     }
 }
 

@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 enum SettingsSection: String, CaseIterable, Identifiable {
     case general = "General"
+    case appearance = "Apariencia"
     case aboutYou = "Sobre ti"
     case profiles = "Perfiles"
     case spaces = "Spaces"
@@ -20,6 +21,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var symbolName: String {
         switch self {
         case .general: "gearshape"
+        case .appearance: "paintbrush"
         case .aboutYou: "person.text.rectangle"
         case .profiles: "person.crop.circle"
         case .spaces: "square.stack"
@@ -64,6 +66,7 @@ struct SettingsView: View {
     private var sectionContent: some View {
         switch selection {
         case .general: GeneralSettings()
+        case .appearance: AppearanceSettings()
         case .aboutYou: AboutYouSettings()
         case .profiles: ProfileSettings()
         case .spaces: SpaceSettings()
@@ -95,7 +98,7 @@ struct SettingsTabBar: View {
                             Text(section.rawValue).font(.system(size: 10.5, weight: .medium))
                         }
                         .foregroundStyle(selection == section ? Color.accentColor : Color.secondary)
-                        .frame(width: 68, height: 50)
+                        .frame(width: 64, height: 50)
                         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(selection == section ? 0.07 : 0)))
                         .contentShape(Rectangle())
                     }
@@ -260,6 +263,59 @@ struct GeneralSettings: View {
         } catch {
             statusMessage = "No se pudo leer el sidebar de Arc: \(error.localizedDescription)"
         }
+    }
+}
+
+struct AppearanceSettings: View {
+    private static let tileSize: CGFloat = 76
+    private static let columns = [GridItem(.adaptive(minimum: 104), spacing: 14)]
+
+    @ViewState private var selectedID = BrowserStore.shared.settings.appIconID
+
+    var body: some View {
+        SettingsGroup(title: "Ícono de la app", footer: "El ícono elegido se usa en el Dock y en el selector de apps, y se mantiene al reiniciar Parsec.") {
+            LazyVGrid(columns: Self.columns, alignment: .leading, spacing: 14) {
+                ForEach(AppIconCatalog.options) { option in
+                    AppIconTile(option: option, isSelected: option.id == selectedID, size: Self.tileSize) { select(option) }
+                }
+            }
+            .padding(.vertical, 6)
+        }
+    }
+
+    private func select(_ option: AppIconOption) {
+        selectedID = option.id
+        BrowserStore.shared.settings.appIconID = option.id
+        BrowserStore.shared.saveSoon()
+        AppIconCatalog.applySelected()
+    }
+}
+
+struct AppIconTile: View {
+    let option: AppIconOption
+    let isSelected: Bool
+    let size: CGFloat
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(nsImage: option.image)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: size, height: size)
+                    .padding(6)
+                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.accentColor, lineWidth: isSelected ? 2.5 : 0))
+                Text(option.title)
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                    .lineLimit(1)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(option.title)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 

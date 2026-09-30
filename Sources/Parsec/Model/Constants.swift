@@ -38,6 +38,10 @@ enum StorageConstants {
     }
 }
 
+enum AppIconConstants {
+    static let defaultID = "default"
+}
+
 enum LifecycleConstants {
     static let archiveTodayAfter: TimeInterval = 12 * 60 * 60
     static let lifecycleTickInterval: TimeInterval = 60
