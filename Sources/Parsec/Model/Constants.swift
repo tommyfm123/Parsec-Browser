@@ -64,6 +64,7 @@ enum LayoutConstants {
     static let rowCornerRadius: CGFloat = 8
     static let folderIndent: CGFloat = 14
     static let swipeCommitThreshold: CGFloat = 0.28
+    static let newSpaceSwipeThreshold: CGFloat = 0.4
 }
 
 enum SidebarViewMetrics {

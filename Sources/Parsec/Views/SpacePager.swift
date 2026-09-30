@@ -4,7 +4,10 @@ import SwiftUI
 struct SpacePager: View {
     @Bindable var model: WindowModel
     @ViewState private var dragOffset: CGFloat = 0
+    @ViewState private var newSpaceProgress: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var isOnLastSpace: Bool { model.currentSpaceIndex == model.spaces.count - 1 }
 
     var body: some View {
         GeometryReader { geometry in
@@ -25,9 +28,18 @@ struct SpacePager: View {
             .offset(x: -CGFloat(model.currentSpaceIndex) * pageWidth + dragOffset)
             .animation(Motion.spring(reduceMotion: reduceMotion), value: model.currentSpaceIndex)
             .frame(width: pageWidth, alignment: .leading)
-            .background(SwipeMonitor(onChange: { dragOffset = rubberBand($0, width: pageWidth) }, onEnd: { finishSwipe($0, width: pageWidth) }))
+            .background(SwipeMonitor(onChange: { trackSwipe($0, width: pageWidth) }, onEnd: { finishSwipe($0, width: pageWidth) }))
+            .overlay(alignment: .trailing) {
+                NewSpaceSwipeIndicator(progress: newSpaceProgress)
+            }
         }
         .clipped()
+    }
+
+    private func trackSwipe(_ offset: CGFloat, width: CGFloat) {
+        dragOffset = rubberBand(offset, width: width)
+        let isPullingPastEnd = isOnLastSpace && offset < 0 && !model.isPrivate
+        newSpaceProgress = isPullingPastEnd ? min(-offset / (width * LayoutConstants.newSpaceSwipeThreshold), 1) : 0
     }
 
     private func rubberBand(_ offset: CGFloat, width: CGFloat) -> CGFloat {
@@ -37,12 +49,45 @@ struct SpacePager: View {
     }
 
     private func finishSwipe(_ offset: CGFloat, width: CGFloat) {
+        let shouldCreateSpace = newSpaceProgress >= 1
+        newSpaceProgress = 0
+        if shouldCreateSpace {
+            withAnimation(Motion.spring(reduceMotion: reduceMotion)) { dragOffset = 0 }
+            return model.isNewSpacePresented = true
+        }
         let shouldChange = abs(offset) > width * LayoutConstants.swipeCommitThreshold
         withAnimation(Motion.spring(reduceMotion: reduceMotion)) {
             dragOffset = 0
             guard shouldChange else { return }
             model.switchSpace(by: offset < 0 ? 1 : -1)
         }
+    }
+}
+
+struct NewSpaceSwipeIndicator: View {
+    private static let diameter: CGFloat = 40
+    private static let ringWidth: CGFloat = 3
+
+    let progress: CGFloat
+
+    var body: some View {
+        ZStack {
+            Circle().fill(.regularMaterial)
+            Circle().stroke(Color.primary.opacity(0.15), lineWidth: Self.ringWidth)
+            Circle()
+                .trim(from: 0, to: progress)
+                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: Self.ringWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            Image(systemName: "plus")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(progress >= 1 ? Color.accentColor : Color.secondary)
+        }
+        .frame(width: Self.diameter, height: Self.diameter)
+        .padding(.trailing, 8)
+        .scaleEffect(0.6 + 0.4 * progress)
+        .opacity(progress > 0 ? 1 : 0)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
