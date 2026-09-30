@@ -9,7 +9,7 @@ enum StartMode: CaseIterable {
     var title: String {
         switch self {
         case .search: "Buscar"
-        case .ask: "IA"
+        case .ask: "Preguntar"
         case .browse: "Agente"
         }
     }
@@ -17,7 +17,7 @@ enum StartMode: CaseIterable {
     var symbolName: String {
         switch self {
         case .search: "magnifyingglass"
-        case .ask: "sparkle"
+        case .ask: "questionmark.bubble"
         case .browse: "cursorarrow.motionlines"
         }
     }
@@ -27,14 +27,6 @@ enum StartMode: CaseIterable {
         case .search: "Busca o escribe una dirección…"
         case .ask: "Pregunta lo que quieras…"
         case .browse: "Pídele al agente que navegue por ti…"
-        }
-    }
-
-    var help: String {
-        switch self {
-        case .search: "Buscar en Google o abrir un sitio"
-        case .ask: "Preguntarle a la IA"
-        case .browse: "El agente navega, investiga y te trae las fuentes"
         }
     }
 
@@ -57,43 +49,40 @@ struct StartPageView: View {
     var body: some View {
         ZStack {
             PageSurface(cornerRadius: cornerRadius)
-            VStack(spacing: 30) {
-                VStack(spacing: 18) {
-                    if let mark = BrandMark.image {
-                        Image(nsImage: mark)
-                            .resizable()
-                            .renderingMode(.template)
-                            .interpolation(.high)
-                            .scaledToFit()
-                            .frame(width: 38, height: 38)
-                            .foregroundStyle(.primary)
-                            .accessibilityHidden(true)
+            GeometryReader { geometry in
+                ScrollView {
+                    VStack(spacing: 48) {
+                        VStack(spacing: 18) {
+                            if let mark = BrandMark.image {
+                                Image(nsImage: mark)
+                                    .resizable()
+                                    .renderingMode(.template)
+                                    .interpolation(.high)
+                                    .scaledToFit()
+                                    .frame(width: 38, height: 38)
+                                    .foregroundStyle(.primary)
+                                    .accessibilityHidden(true)
+                            }
+                            Text("¿Qué quieres saber hoy?")
+                                .font(.system(size: 40, weight: .regular, design: .serif))
+                                .tracking(-0.9)
+                                .multilineTextAlignment(.center)
+                        }
+                        AskInputCard(model: model, query: $query, mode: $mode, isFocused: $isFieldFocused, isRunning: false, onSubmit: submit, onStop: {})
+                            .frame(maxWidth: Self.cardWidth)
+                        if !model.isPrivate {
+                            StartPageLibrary(model: model, targetNodeID: targetNodeID)
+                                .frame(maxWidth: Self.cardWidth)
+                        }
                     }
-                    Text("¿Qué quieres saber hoy?")
-                        .font(.system(size: 40, weight: .regular, design: .serif))
-                        .tracking(-0.9)
-                        .multilineTextAlignment(.center)
+                    .frame(maxWidth: 850)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: geometry.size.height, alignment: .top)
+                    .padding(.horizontal, 32)
+                    .padding(.top, 56)
+                    .padding(.bottom, 36)
                 }
-                AskInputCard(model: model, query: $query, mode: $mode, isFocused: $isFieldFocused, isRunning: false, onSubmit: submit, onStop: {})
-            }
-            .frame(maxWidth: Self.cardWidth)
-            .padding(.horizontal, 32)
-            .offset(y: -40)
-        }
-        .overlay(alignment: .topTrailing) {
-            if !model.isPrivate {
-                Button { model.isHistoryPresented = true } label: {
-                    Label("Historial", systemImage: "clock.arrow.circlepath")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 10)
-                        .frame(height: 28)
-                        .contentShape(Capsule())
-                        .hoverHighlight(cornerRadius: 14)
-                }
-                .buttonStyle(.plain)
-                .help("Historial de conversaciones (⌘Y)")
-                .padding(16)
+                .scrollIndicators(.never)
             }
         }
         .padding(cornerRadius > 0 ? 0 : SidebarView.outerInset)
@@ -283,19 +272,17 @@ struct StartModePicker: View {
                 Button { withAnimation(.snappy) { mode = candidate } } label: {
                     HStack(spacing: 5) {
                         Image(systemName: candidate.symbolName).font(.system(size: 11, weight: .semibold))
-                        if candidate == mode {
-                            Text(candidate.title).font(.system(size: 12, weight: .semibold))
-                        }
+                        Text(candidate.title).font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundStyle(candidate == mode ? Color.primary : Color.secondary)
-                    .padding(.horizontal, candidate == mode ? 11 : 9)
+                    .padding(.horizontal, 10)
                     .frame(height: 28)
                     .background(Capsule().fill(candidate == mode ? Color(nsColor: .textBackgroundColor) : Color.clear).shadow(color: .black.opacity(candidate == mode ? 0.12 : 0), radius: 2, y: 1))
                     .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .clickable()
-                .help(candidate.help)
+                .help(candidate.title)
                 .accessibilityLabel(candidate.title)
                 .accessibilityAddTraits(candidate == mode ? .isSelected : [])
             }

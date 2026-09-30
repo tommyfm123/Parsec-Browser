@@ -333,16 +333,14 @@ struct FavoriteTile: View {
 
 struct SidebarFooter: View {
     @Bindable var model: WindowModel
-    @ViewState private var isDownloadsPresented = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 4) {
             IconButton(symbolName: DownloadManager.shared.activeCount > 0 ? "arrow.down.circle.fill" : "arrow.down.circle", label: "Descargas") {
-                isDownloadsPresented = true
+                AppDelegate.shared.openDownloadsLibrary(profileID: model.profileID, allowsHistory: !model.isPrivate)
             }
             .foregroundStyle(.secondary)
-            .popover(isPresented: $isDownloadsPresented, arrowEdge: .top) { DownloadsView() }
             ClaudeButton(model: model)
             GeometryReader { geometry in
                 ScrollView(.horizontal) {
@@ -414,7 +412,6 @@ struct NewItemMenu: View {
 
 struct SpaceDot: View {
     private static let dotSize: CGFloat = 6
-    private static let selectedDotWidth: CGFloat = 16
 
     @Bindable var model: WindowModel
     let space: Space
@@ -447,9 +444,9 @@ struct SpaceDot: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color.primary.opacity(isSelected ? 0.8 : isHovering ? 0.5 : 0.32))
             } else {
-                Capsule()
+                Circle()
                     .fill(Color.primary.opacity(isSelected ? 0.7 : isHovering ? 0.4 : 0.22))
-                    .frame(width: isSelected ? Self.selectedDotWidth : Self.dotSize, height: Self.dotSize)
+                    .frame(width: Self.dotSize, height: Self.dotSize)
             }
         }
         .frame(width: 24, height: 26)

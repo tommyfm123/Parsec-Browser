@@ -10,6 +10,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case profiles = "Perfiles"
     case spaces = "Spaces"
     case assistant = "IA"
+    case integrations = "Plugins & MCPs"
+    case features = "Features"
     case shortcuts = "Atajos"
     case privacy = "Privacidad"
     case passwords = "Contraseñas"
@@ -26,6 +28,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .profiles: "person.crop.circle"
         case .spaces: "square.stack"
         case .assistant: "sparkles"
+        case .integrations: "puzzlepiece.extension"
+        case .features: "square.grid.2x2"
         case .shortcuts: "keyboard"
         case .privacy: "lock.shield"
         case .passwords: "key"
@@ -65,6 +69,8 @@ struct SettingsView: View {
         case .profiles: ProfileSettings()
         case .spaces: SpaceSettings()
         case .assistant: AssistantSettings()
+        case .integrations: IntegrationSettings()
+        case .features: FeatureSettings()
         case .shortcuts: ShortcutSettings()
         case .privacy: PrivacySettings()
         case .passwords: PasswordSettings()
@@ -231,6 +237,93 @@ enum SettingsBinding {
                 BrowserStore.shared.saveSoon()
             }
         )
+    }
+}
+
+struct FeatureSettings: View {
+    @ViewState private var statusMessage = ""
+    private var hotKey: MiniPopupHotKey { BrowserStore.shared.settings.miniPopupHotKey }
+
+    private var enabledBinding: Binding<Bool> {
+        Binding(get: { BrowserStore.shared.settings.miniPopupEnabled }, set: updateEnabled)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            SettingsGroup(title: "Mini popup", footer: statusMessage.isEmpty ? nil : statusMessage) {
+                SettingsToggle(
+                    symbolName: "sparkles.rectangle.stack",
+                    tint: .orange,
+                    title: "Activar Mini popup",
+                    detail: "Abre una ventana para preguntarle a Parsec desde cualquier app.",
+                    isOn: enabledBinding
+                )
+            }
+            SettingsGroup(title: "Acceso rápido", footer: "Funciona desde cualquier app. Clic en el atajo para grabar uno nuevo; borrar vuelve a \(MiniPopupHotKey.standard.displayText).") {
+                SettingsItem(symbolName: "keyboard", tint: .gray, title: "Mostrar u ocultar Mini popup") {
+                    ShortcutRecorder(displayText: hotKey.displayText, onRecord: recordHotKey)
+                }
+                SettingsItem(symbolName: "rectangle.inset.filled", tint: .blue, title: "Probar Mini popup") {
+                    Button("Abrir") { MiniPopupController.shared.show() }
+                }
+            }
+            MiniPopupFeaturePreview(hotKey: hotKey)
+        }
+    }
+
+    private func recordHotKey(_ shortcut: RecordedShortcut?) {
+        let newHotKey = shortcut.map(MiniPopupHotKey.init) ?? .standard
+        guard MiniPopupController.shared.setHotKey(newHotKey) else {
+            statusMessage = "No se pudo usar \(newHotKey.displayText): otra app ya lo tiene. Prueba otra combinación."
+            return
+        }
+        BrowserStore.shared.settings.miniPopupHotKey = newHotKey
+        BrowserStore.shared.saveSoon()
+        statusMessage = ""
+    }
+
+    private func updateEnabled(_ isEnabled: Bool) {
+        guard MiniPopupController.shared.setEnabled(isEnabled) else {
+            statusMessage = "No se pudo registrar el atajo global. Reinicia Parsec y vuelve a intentarlo."
+            return
+        }
+        BrowserStore.shared.settings.miniPopupEnabled = isEnabled
+        BrowserStore.shared.saveSoon()
+        statusMessage = ""
+    }
+}
+
+struct MiniPopupFeaturePreview: View {
+    let hotKey: MiniPopupHotKey
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Pregúntale algo a Parsec en cualquier momento")
+                .font(.system(size: 13, weight: .medium))
+            Text("Usa el atajo y aparece una barra pequeña sobre lo que estés haciendo.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles").foregroundStyle(.secondary)
+                Text("Escribe tu pregunta…")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                Text(hotKey.displayText)
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(.primary)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 44)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.06)))
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.primary.opacity(0.045)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.primary.opacity(0.07)))
     }
 }
 
@@ -630,7 +723,7 @@ final class ProviderStatusModel {
         let request = AssistantRequest(
             prompt: Self.testPrompt, history: [], attachments: [], systemPrompt: Self.testSystemPrompt,
             usesWebSearch: false, enabledConnectors: [], resumeSessionID: nil,
-            model: BrowserStore.shared.settings.assistantModel(for: provider)
+            model: BrowserStore.shared.settings.assistantModel(for: provider), usesIntegrations: false
         )
         run = AssistantProviderFactory.start(provider, request: request) { [weak self] event in
             self?.handle(event)
@@ -871,7 +964,7 @@ struct ShortcutSettings: View {
                     HStack {
                         Text(item.title).font(.system(size: 13))
                         Spacer()
-                        ShortcutRecorder(item: item) { revision += 1 }
+                        ShortcutRecorder(displayText: MainMenu.displayText(for: item)) { record($0, for: item) }
                     }
                 }
             }
@@ -884,6 +977,19 @@ struct ShortcutSettings: View {
         }
         .id(revision)
     }
+
+    private func record(_ shortcut: RecordedShortcut?, for item: MenuShortcutItem) {
+        store.settings.shortcutOverrides[item.id] = shortcut.map { ShortcutCode.encode(key: $0.key, modifiers: $0.modifiers) }
+        store.saveSoon()
+        NSApp.mainMenu = MainMenu.build()
+        revision += 1
+    }
+}
+
+struct RecordedShortcut {
+    let keyCode: UInt16
+    let key: String
+    let modifiers: NSEvent.ModifierFlags
 }
 
 struct ShortcutRecorder: View {
@@ -892,15 +998,10 @@ struct ShortcutRecorder: View {
     private static let recordableModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
     private static let requiredModifiers: NSEvent.ModifierFlags = [.command, .option, .control]
 
-    let item: MenuShortcutItem
-    let onChange: () -> Void
+    let displayText: String
+    let onRecord: (RecordedShortcut?) -> Void
     @ViewState private var isRecording = false
     @ViewState private var monitor: Any?
-
-    private var displayText: String {
-        let shortcut = MainMenu.shortcut(for: item)
-        return ShortcutCode.display(key: shortcut.key, modifiers: shortcut.modifiers)
-    }
 
     var body: some View {
         Button(action: toggleRecording) {
@@ -929,18 +1030,15 @@ struct ShortcutRecorder: View {
 
     private func handle(_ event: NSEvent) {
         if event.keyCode == Self.escapeKeyCode { return stopRecording() }
-        if event.keyCode == Self.deleteKeyCode { return save(nil) }
+        if event.keyCode == Self.deleteKeyCode { return finish(nil) }
         let modifiers = event.modifierFlags.intersection(Self.recordableModifiers)
         guard !modifiers.isDisjoint(with: Self.requiredModifiers), let key = event.charactersIgnoringModifiers?.lowercased(), !key.isEmpty else { return }
-        save(ShortcutCode.encode(key: key, modifiers: modifiers))
+        finish(RecordedShortcut(keyCode: event.keyCode, key: key, modifiers: modifiers))
     }
 
-    private func save(_ code: String?) {
-        BrowserStore.shared.settings.shortcutOverrides[item.id] = code
-        BrowserStore.shared.saveSoon()
-        NSApp.mainMenu = MainMenu.build()
+    private func finish(_ shortcut: RecordedShortcut?) {
         stopRecording()
-        onChange()
+        onRecord(shortcut)
     }
 
     private func stopRecording() {

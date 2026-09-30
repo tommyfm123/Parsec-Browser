@@ -5,22 +5,27 @@ import WebKit
 @MainActor
 @Observable
 final class DownloadItem: Identifiable {
-    enum State {
+    enum State: String, Codable {
         case inProgress
         case finished
         case failed
     }
 
-    let id = UUID()
+    let id: UUID
     let filename: String
     let destinationURL: URL
+    let createdAt: Date
     var fractionCompleted = 0.0
     var state = State.inProgress
     @ObservationIgnored var progressObservation: NSKeyValueObservation?
 
-    init(filename: String, destinationURL: URL) {
+    init(id: UUID = UUID(), filename: String, destinationURL: URL, createdAt: Date = Date(), state: State = .inProgress, fractionCompleted: Double = 0) {
+        self.id = id
         self.filename = filename
         self.destinationURL = destinationURL
+        self.createdAt = createdAt
+        self.state = state
+        self.fractionCompleted = fractionCompleted
     }
 }
 
@@ -30,9 +35,17 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
     static let shared = DownloadManager()
     private static let fallbackFilename = "descarga"
     private static let riskyExtensions: Set<String> = ["app", "pkg", "mpkg", "dmg", "command", "sh", "zsh", "tool", "terminal", "scpt", "workflow", "jar", "exe", "msi", "bat", "iso", "webloc", "fileloc"]
+    private static let persistenceURL = StorageConstants.applicationSupportURL.appending(path: "downloads.json")
 
     private(set) var items: [DownloadItem] = []
     @ObservationIgnored private var itemsByDownload: [ObjectIdentifier: DownloadItem] = [:]
+
+    override init() {
+        super.init()
+        items = Self.loadItems()
+        for item in items where item.state == .inProgress { item.state = .failed }
+        persistItems()
+    }
 
     var activeCount: Int { items.filter { $0.state == .inProgress }.count }
 
@@ -52,6 +65,7 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
         }
         items.insert(item, at: 0)
         itemsByDownload[ObjectIdentifier(download)] = item
+        persistItems()
         completionHandler(destinationURL)
     }
 
@@ -73,6 +87,16 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
 
     func clearFinished() {
         items.removeAll { $0.state != .inProgress }
+        persistItems()
+    }
+
+    func delete(_ item: DownloadItem) throws {
+        guard item.state != .inProgress else { return }
+        if FileManager.default.fileExists(atPath: item.destinationURL.path) {
+            try FileManager.default.removeItem(at: item.destinationURL)
+        }
+        items.removeAll { $0.id == item.id }
+        persistItems()
     }
 
     private func confirmIfRisky(_ filename: String, source: String) -> Bool {
@@ -102,6 +126,42 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
         item.state = state
         item.fractionCompleted = state == .finished ? 1 : item.fractionCompleted
         item.progressObservation = nil
+        persistItems()
+    }
+
+    private func persistItems() {
+        do {
+            let records = items.map(StoredDownload.init)
+            let data = try JSONEncoder().encode(records)
+            try data.write(to: Self.persistenceURL, options: .atomic)
+        } catch {
+            NSApp.presentError(error)
+        }
+    }
+
+    private static func loadItems() -> [DownloadItem] {
+        guard let data = try? Data(contentsOf: persistenceURL), let records = try? JSONDecoder().decode([StoredDownload].self, from: data) else { return [] }
+        return records.map { record in
+            DownloadItem(id: record.id, filename: record.filename, destinationURL: record.destinationURL, createdAt: record.createdAt, state: record.state, fractionCompleted: record.fractionCompleted)
+        }
+    }
+
+    private struct StoredDownload: Codable {
+        let id: UUID
+        let filename: String
+        let destinationURL: URL
+        let createdAt: Date
+        let state: DownloadItem.State
+        let fractionCompleted: Double
+
+        @MainActor init(item: DownloadItem) {
+            id = item.id
+            filename = item.filename
+            destinationURL = item.destinationURL
+            createdAt = item.createdAt
+            state = item.state
+            fractionCompleted = item.fractionCompleted
+        }
     }
 
     private func uniqueDestination(for filename: String) -> URL {

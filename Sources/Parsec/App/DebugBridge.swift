@@ -52,6 +52,8 @@ enum DebugBridge {
         case "renderAssistant": render(AssistantPanelView(model: model, assistant: model.assistant).frame(height: 760), named: "assistant-render")
         case "renderFolders": render(FolderPreviewList(model: model, space: BrowserStore.shared.spaces[Int(argument) ?? 0]), named: "folders-render")
         case "lifecycle": BrowserStore.shared.runLifecycleTick()
+        case "miniPopup": MiniPopupController.shared.show()
+        case "renderRoutineEditor": render(RoutineEditorSheet(routine: RoutineTemplate.all[0].makeRoutine(profileID: model.profileID), spaces: model.spaces, isNew: true) { _ in }.background(Color(nsColor: .windowBackgroundColor)), named: "routine-render")
         default: break
         }
     }

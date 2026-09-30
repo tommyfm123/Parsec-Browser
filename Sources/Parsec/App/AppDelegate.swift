@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var privateWindows: [BrowserWindow] = []
     private var littleWindows: [LittleWindow] = []
     private var settingsWindow: NSWindow?
+    private var downloadsLibraryWindow: NSWindow?
     private var pendingURLs: [URL] = []
     private var hasFinishedLaunching = false
 
@@ -21,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ContentBlocker.shared.prepare()
         store.visibleNodeIDs = { [weak self] in self?.visibleNodeIDs() ?? [] }
         store.startLifecycle()
+        MiniPopupController.shared.configure(isEnabled: store.settings.miniPopupEnabled)
+        AssistantRoutineStore.shared.startScheduler()
         NSApp.mainMenu = MainMenu.build()
         AppIconCatalog.applySelected()
         #if DEBUG
@@ -131,9 +134,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
+    func openDownloadsLibrary(section: DownloadsLibrarySection = .downloads, profileID: UUID, allowsHistory: Bool = true) {
+        let hostingView = NSHostingView(rootView: DownloadsLibraryView(initialSection: section, profileID: profileID, allowsHistory: allowsHistory))
+        hostingView.sizingOptions = []
+        let window = downloadsLibraryWindow ?? makeDownloadsLibraryWindow()
+        window.contentView = hostingView
+        window.setContentSize(DownloadsLibraryView.size)
+        if downloadsLibraryWindow == nil { window.center() }
+        downloadsLibraryWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate()
+    }
+
     private func makeSettingsWindow() -> NSWindow {
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: SettingsView.size), styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = "Configuración de Parsec"
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isReleasedWhenClosed = false
+        return window
+    }
+
+    private func makeDownloadsLibraryWindow() -> NSWindow {
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: DownloadsLibraryView.size), styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
+        window.title = "Biblioteca de Parsec"
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isReleasedWhenClosed = false

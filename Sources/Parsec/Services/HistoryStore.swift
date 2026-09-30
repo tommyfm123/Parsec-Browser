@@ -4,6 +4,8 @@ import SQLite3
 struct HistoryEntry: Hashable {
     let url: URL
     let title: String
+    let visitCount: Int
+    let lastVisited: Date
 }
 
 final class HistoryStore {
@@ -27,10 +29,15 @@ final class HistoryStore {
             title = CASE WHEN excluded.title = '' THEN title ELSE excluded.title END;
         """
     private static let searchSQL = """
-        SELECT url, title FROM visits
+        SELECT url, title, visit_count, last_visit FROM visits
         WHERE profile = ?1 AND (url LIKE ?2 ESCAPE '\\' OR title LIKE ?2 ESCAPE '\\')
         ORDER BY visit_count DESC, last_visit DESC
         LIMIT ?3;
+        """
+    private static let allVisitsSQL = """
+        SELECT url, title, visit_count, last_visit FROM visits
+        WHERE profile = ?1
+        ORDER BY last_visit DESC;
         """
     private static let deleteProfileSQL = "DELETE FROM visits WHERE profile = ?1;"
 
@@ -64,7 +71,18 @@ final class HistoryStore {
             sqlite3_bind_int(statement, 3, Int32(limit))
         }, onRow: { statement in
             guard let url = URL(string: self.columnText(statement, 0)) else { return }
-            entries.append(HistoryEntry(url: url, title: self.columnText(statement, 1)))
+            entries.append(HistoryEntry(url: url, title: self.columnText(statement, 1), visitCount: Int(sqlite3_column_int(statement, 2)), lastVisited: Date(timeIntervalSince1970: sqlite3_column_double(statement, 3))))
+        })
+        return entries
+    }
+
+    func allVisits(profileID: UUID) -> [HistoryEntry] {
+        var entries: [HistoryEntry] = []
+        execute(Self.allVisitsSQL, bindings: { statement in
+            self.bind(profileID.uuidString, at: 1, in: statement)
+        }, onRow: { statement in
+            guard let url = URL(string: self.columnText(statement, 0)) else { return }
+            entries.append(HistoryEntry(url: url, title: self.columnText(statement, 1), visitCount: Int(sqlite3_column_int(statement, 2)), lastVisited: Date(timeIntervalSince1970: sqlite3_column_double(statement, 3))))
         })
         return entries
     }

@@ -746,7 +746,7 @@ struct ModelPicker: View {
             .padding(.leading, 5)
             .padding(.trailing, 9)
             .frame(height: compact ? 26 : 30)
-            .background(Capsule().fill(Color.primary.opacity(isPresented ? 0.1 : 0)))
+            .background(Capsule().fill(Color.primary.opacity(isPresented ? 0.12 : 0.055)))
             .contentShape(Capsule())
             .hoverHighlight(cornerRadius: compact ? 13 : 15)
         }

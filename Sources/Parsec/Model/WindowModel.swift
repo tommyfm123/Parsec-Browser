@@ -280,6 +280,12 @@ extension WindowModel {
         browsing ? conversation.browse(text) : conversation.send(text)
     }
 
+    func run(_ routine: AssistantRoutine, in nodeID: UUID? = nil) {
+        let otherSpace = spaces.first { $0.id == routine.spaceID && $0.id != selectedSpaceID }
+        let targetNodeID = otherSpace.map { openInNewTab(nil, space: $0).id } ?? nodeID
+        startConversation(routine.prompt, browsing: routine.usesAgent, in: targetNodeID)
+    }
+
     func openConversation(_ conversationID: UUID) {
         isHistoryPresented = false
         if let existing = currentSpace.allNodes.allTabs.first(where: { $0.conversationID == conversationID }) {
@@ -604,7 +610,10 @@ extension WindowModel {
     }
 
     func newAgent() {
-        let agent = AssistantModel(windowModel: self)
+        addAgent(AssistantModel(windowModel: self))
+    }
+
+    func addAgent(_ agent: AssistantModel) {
         agents.append(agent)
         selectAgent(agent.id)
     }

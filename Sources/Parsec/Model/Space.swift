@@ -169,6 +169,8 @@ struct BrowserSettings: Codable {
     var assistantUsesWebSearch = false
     var assistantConnectors: Set<String> = []
     var hasSeenWelcome = false
+    var miniPopupEnabled = false
+    var miniPopupHotKey = MiniPopupHotKey.standard
     var shortcutOverrides: [String: String] = [:]
     var blockedSites: [String] = []
     var docsProvider = DocsProvider.googleDocs
@@ -228,6 +230,8 @@ struct BrowserSettings: Codable {
         assistantUsesWebSearch = try container.decodeIfPresent(Bool.self, forKey: .assistantUsesWebSearch) ?? defaults.assistantUsesWebSearch
         assistantConnectors = try container.decodeIfPresent(Set<String>.self, forKey: .assistantConnectors) ?? defaults.assistantConnectors
         hasSeenWelcome = try container.decodeIfPresent(Bool.self, forKey: .hasSeenWelcome) ?? defaults.hasSeenWelcome
+        miniPopupEnabled = try container.decodeIfPresent(Bool.self, forKey: .miniPopupEnabled) ?? defaults.miniPopupEnabled
+        miniPopupHotKey = try container.decodeIfPresent(MiniPopupHotKey.self, forKey: .miniPopupHotKey) ?? defaults.miniPopupHotKey
         shortcutOverrides = try container.decodeIfPresent([String: String].self, forKey: .shortcutOverrides) ?? defaults.shortcutOverrides
         blockedSites = try container.decodeIfPresent([String].self, forKey: .blockedSites) ?? defaults.blockedSites
         docsProvider = try container.decodeIfPresent(DocsProvider.self, forKey: .docsProvider) ?? defaults.docsProvider

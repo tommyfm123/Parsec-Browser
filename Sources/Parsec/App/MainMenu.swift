@@ -189,6 +189,11 @@ enum MainMenu {
         BrowserStore.shared.settings.shortcutOverrides[item.id].flatMap(ShortcutCode.decode) ?? (item.key, item.modifiers)
     }
 
+    static func displayText(for item: MenuShortcutItem) -> String {
+        let shortcut = shortcut(for: item)
+        return ShortcutCode.display(key: shortcut.key, modifiers: shortcut.modifiers)
+    }
+
     private static func makeItem(_ item: Item) -> NSMenuItem {
         let shortcut = shortcut(for: item)
         let menuItem = NSMenuItem(title: item.title, action: item.action, keyEquivalent: shortcut.key)

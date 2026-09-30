@@ -68,7 +68,7 @@ enum LayoutConstants {
     static let rowCornerRadius: CGFloat = 8
     static let folderIndent: CGFloat = 14
     static let swipeCommitThreshold: CGFloat = 0.28
-    static let newSpaceSwipeDeadZone: CGFloat = 0.4
+    static let newSpaceSwipeDeadZone: CGFloat = 0.44
     static let newSpaceSwipeThreshold: CGFloat = 1.0
 }
 

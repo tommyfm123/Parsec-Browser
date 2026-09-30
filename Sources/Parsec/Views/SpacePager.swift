@@ -7,6 +7,9 @@ struct SpacePager: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isOnLastSpace: Bool { model.currentSpaceIndex == model.spaces.count - 1 }
+    private var spaceTransitionAnimation: Animation {
+        reduceMotion ? .easeInOut(duration: 0.18) : .interactiveSpring(response: 0.42, dampingFraction: 0.92, blendDuration: 0.12)
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -25,7 +28,7 @@ struct SpacePager: View {
                 }
             }
             .offset(x: -CGFloat(model.currentSpaceIndex) * pageWidth + dragOffset)
-            .animation(Motion.spring(reduceMotion: reduceMotion), value: model.currentSpaceIndex)
+            .animation(spaceTransitionAnimation, value: model.currentSpaceIndex)
             .frame(width: pageWidth, alignment: .leading)
             .background(SwipeMonitor(onChange: { trackSwipe($0, width: pageWidth) }, onEnd: { finishSwipe($0, width: pageWidth) }))
             .overlay(alignment: .center) {
@@ -57,13 +60,19 @@ struct SpacePager: View {
 
     private func finishSwipe(_ offset: CGFloat, width: CGFloat) {
         let shouldCreateSpace = model.newSpacePullProgress >= 1
-        withAnimation(Motion.spring(reduceMotion: reduceMotion)) { model.newSpacePullProgress = 0 }
+        withAnimation(spaceTransitionAnimation) { model.newSpacePullProgress = 0 }
         if shouldCreateSpace {
-            withAnimation(Motion.spring(reduceMotion: reduceMotion)) { dragOffset = 0 }
+            withAnimation(spaceTransitionAnimation) { dragOffset = 0 }
             return model.isNewSpacePresented = true
         }
         let shouldChange = abs(offset) > width * LayoutConstants.swipeCommitThreshold
-        withAnimation(Motion.spring(reduceMotion: reduceMotion)) {
+        let isPullingPastStart = model.currentSpaceIndex == 0 && offset > 0
+        if shouldChange, isPullingPastStart, !model.isPrivate {
+            withAnimation(spaceTransitionAnimation) { dragOffset = 0 }
+            AppDelegate.shared.openDownloadsLibrary(profileID: model.profileID)
+            return
+        }
+        withAnimation(spaceTransitionAnimation) {
             dragOffset = 0
             guard shouldChange else { return }
             model.switchSpace(by: offset < 0 ? 1 : -1)
