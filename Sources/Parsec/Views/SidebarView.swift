@@ -83,7 +83,7 @@ struct SidebarHeader: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Spacer(minLength: 64)
+            Spacer(minLength: 76)
             IconButton(symbolName: "arrow.left", label: "Atrás (⌘[)", isEnabled: model.activePage?.canGoBack == true) { model.goBack() }
             IconButton(symbolName: "arrow.right", label: "Adelante (⌘])", isEnabled: model.activePage?.canGoForward == true) { model.goForward() }
             BrowserMoreMenu(model: model)

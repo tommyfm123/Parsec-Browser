@@ -64,12 +64,20 @@ enum LayoutConstants {
     static let trafficLightsHeight: CGFloat = 30
     static let commandBarWidth: CGFloat = 640
     static let peekScale: CGFloat = 0.85
-    static let littleWindowSize = CGSize(width: 960, height: 680)
+    static let littleWindowSize = CGSize(width: 900, height: 640)
     static let mainWindowSize = CGSize(width: 1400, height: 900)
     static let rowCornerRadius: CGFloat = 8
     static let folderIndent: CGFloat = 14
     static let swipeCommitThreshold: CGFloat = 0.28
     static let newSpaceSwipeThreshold: CGFloat = 0.4
+}
+
+enum LittleWindowMetrics {
+    static let toolbarHeight: CGFloat = 46
+    static let contentInset: CGFloat = 8
+    static let trafficLightsLeadingInset: CGFloat = 16
+    static let trafficLightsReservedWidth: CGFloat = 78
+    static let minimumSize = CGSize(width: 520, height: 360)
 }
 
 enum SidebarViewMetrics {

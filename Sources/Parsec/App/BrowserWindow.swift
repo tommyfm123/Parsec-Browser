@@ -7,7 +7,6 @@ final class BrowserWindow: NSWindow, NSWindowDelegate {
     private static let privateTitle = "Parsec — Privado"
 
     private static let trafficLightsLeadingInset: CGFloat = 20
-    private static let trafficLightButtonTypes: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
 
     let model: WindowModel
     var onClose: (() -> Void)?
@@ -42,25 +41,14 @@ final class BrowserWindow: NSWindow, NSWindowDelegate {
     }
 
     func setTrafficLightsVisible(_ isVisible: Bool) {
-        Self.trafficLightButtonTypes.forEach { buttonType in
+        NSWindow.trafficLightButtonTypes.forEach { buttonType in
             standardWindowButton(buttonType)?.isHidden = !isVisible
         }
         layoutTrafficLights()
     }
 
     func layoutTrafficLights() {
-        let buttons = Self.trafficLightButtonTypes.compactMap(standardWindowButton)
-        guard trafficLightsCenterY > 0, !styleMask.contains(.fullScreen), let firstButton = buttons.first,
-              let titlebarContainer = firstButton.superview?.superview else { return }
-        let buttonHeight = firstButton.frame.height
-        let containerHeight = trafficLightsCenterY + buttonHeight / 2 + 4
-        titlebarContainer.frame = NSRect(x: titlebarContainer.frame.minX, y: frame.height - containerHeight, width: titlebarContainer.frame.width, height: containerHeight)
-        firstButton.superview?.frame = titlebarContainer.bounds
-        let spacing = buttons.count > 1 ? buttons[1].frame.minX - buttons[0].frame.minX : 20
-        let originY = containerHeight - trafficLightsCenterY - buttonHeight / 2
-        for (index, button) in buttons.enumerated() {
-            button.setFrameOrigin(NSPoint(x: Self.trafficLightsLeadingInset + CGFloat(index) * spacing, y: originY))
-        }
+        positionTrafficLights(centerY: trafficLightsCenterY, leadingInset: Self.trafficLightsLeadingInset)
     }
 
     func windowDidResize(_ notification: Notification) {

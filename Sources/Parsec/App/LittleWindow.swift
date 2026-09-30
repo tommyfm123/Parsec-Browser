@@ -78,6 +78,9 @@ final class LittleWindow: NSWindow, NSWindowDelegate {
         )
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
+        isOpaque = false
+        backgroundColor = .clear
+        minSize = LittleWindowMetrics.minimumSize
         isReleasedWhenClosed = false
         level = .floating
         tabbingMode = .disallowed
@@ -85,6 +88,19 @@ final class LittleWindow: NSWindow, NSWindowDelegate {
         contentView = NSHostingView(rootView: LittleBrowserView(model: model))
         model.window = self
         center()
+        layoutTrafficLights()
+    }
+
+    func layoutTrafficLights() {
+        positionTrafficLights(centerY: LittleWindowMetrics.toolbarHeight / 2, leadingInset: LittleWindowMetrics.trafficLightsLeadingInset)
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        layoutTrafficLights()
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        layoutTrafficLights()
     }
 
     func windowWillClose(_ notification: Notification) {
