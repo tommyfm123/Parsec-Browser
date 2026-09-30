@@ -118,6 +118,7 @@ struct TabRow: View {
     private var isCapturing: Bool { node.allTabs.contains { $0.page?.isCapturingMedia == true } }
     private var isToday: Bool { model.isTodayNode(node) }
     private var closesTab: Bool { isToday || isLoaded }
+    private var contentOpacity: Double { closesTab || node.isSplit ? 1 : 0.55 }
     private var closeSymbol: String { closesTab && !isToday ? "minus" : "xmark" }
     private var closeLabel: String {
         if isToday { return "Cerrar" }
@@ -135,6 +136,7 @@ struct TabRow: View {
                 SplitRowContent(model: model, split: node, isSelected: isSelected)
             } else {
                 FaviconView(url: node.liveURL, size: 16)
+                    .opacity(contentOpacity)
                 if model.renamingNodeID == node.id {
                     InlineRenameField(initialText: node.displayTitle, font: .system(size: 13, weight: .medium)) { model.finishRenaming(node, with: $0) }
                 } else {
@@ -142,6 +144,7 @@ struct TabRow: View {
                         .font(.system(size: 13, weight: isSelected ? .medium : .regular))
                         .lineLimit(1)
                         .truncationMode(.tail)
+                        .opacity(contentOpacity)
                 }
                 Spacer(minLength: 0)
             }
@@ -149,16 +152,16 @@ struct TabRow: View {
                 Circle().fill(Color.red).frame(width: 6, height: 6).accessibilityLabel("Usando cámara o micrófono")
             }
             if isHovering {
-                Button(action: performCloseAction) {
-                    Image(systemName: closeSymbol)
-                        .font(.system(size: 10, weight: .bold))
-                        .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help(closeLabel)
-                .accessibilityLabel(closeLabel)
+                Image(systemName: closeSymbol)
+                    .font(.system(size: 10, weight: .bold))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+                    .foregroundStyle(.secondary)
+                    .clickable()
+                    .highPriorityGesture(TapGesture().onEnded { performCloseAction() })
+                    .help(closeLabel)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(closeLabel)
             }
         }
         .padding(.leading, 10 + CGFloat(depth) * LayoutConstants.folderIndent)
