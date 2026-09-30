@@ -146,15 +146,17 @@ struct TopTabsBar: View {
 
     private static let trafficLightsReservedWidth: CGFloat = 78
     private static let controlHeight: CGFloat = 32
-    private static let addressWidth: CGFloat = 250
+    private static let minimumAddressWidth: CGFloat = 250
+    private static let maximumAddressWidth: CGFloat = 520
 
     var body: some View {
         HStack(spacing: 4) {
             Spacer().frame(width: Self.trafficLightsReservedWidth)
             IconButton(symbolName: "arrow.left", label: "Atrás", isEnabled: model.activePage?.canGoBack == true) { model.goBack() }
             IconButton(symbolName: "arrow.right", label: "Adelante", isEnabled: model.activePage?.canGoForward == true) { model.goForward() }
-            AddressBar(model: model, height: Self.controlHeight)
-                .frame(width: Self.addressWidth)
+            AddressBar(model: model, height: Self.controlHeight, alwaysShowsFullURL: true)
+                .frame(minWidth: Self.minimumAddressWidth, maxWidth: Self.maximumAddressWidth)
+                .layoutPriority(1)
                 .padding(.leading, 6)
             if !model.favorites.isEmpty {
                 TopBarDivider()

@@ -127,12 +127,13 @@ struct BrowserMoreMenu: View {
 struct AddressBar: View {
     @Bindable var model: WindowModel
     var height: CGFloat = 36
+    var alwaysShowsFullURL = false
     @ViewState private var isHovering = false
     @Environment(\.colorScheme) private var colorScheme
 
     private var displayText: String {
         guard let page = model.activePage, let url = page.currentURL else { return "Buscar o escribir URL" }
-        guard !model.store.settings.showsFullURL else { return url.absoluteString }
+        guard !alwaysShowsFullURL, !model.store.settings.showsFullURL else { return url.absoluteString }
         return (url.host() ?? url.absoluteString).replacingOccurrences(of: WebConstants.wwwPrefix, with: "")
     }
 
