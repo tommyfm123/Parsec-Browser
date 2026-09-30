@@ -60,6 +60,7 @@ final class WindowModel: WebPageHost {
     var isAssistantPresented = false
     var isAssistantHovering = false
     var folderIconEditingID: UUID?
+    var renamingNodeID: UUID?
     var spaceIconEditingID: UUID?
     var isWelcomePresented = false
     var agents: [AssistantModel] = []
@@ -284,6 +285,19 @@ extension WindowModel {
         guard isSelected else { return }
         currentSpace.selectedNodeID = nil
         if let fallback { select(fallback) }
+    }
+
+    func finishRenaming(_ node: SidebarNode, with newName: String?) {
+        guard renamingNodeID == node.id else { return }
+        renamingNodeID = nil
+        guard let newName else { return }
+        let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if node.isFolder {
+            if !trimmedName.isEmpty { node.title = trimmedName }
+        } else {
+            node.customTitle = trimmedName.isEmpty ? nil : trimmedName
+        }
+        store.saveSoon()
     }
 
     func reopenClosedTab() {

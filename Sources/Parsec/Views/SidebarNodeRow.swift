@@ -77,6 +77,31 @@ extension View {
     }
 }
 
+struct InlineRenameField: View {
+    let initialText: String
+    let font: Font
+    let onFinish: (String?) -> Void
+    @ViewState private var text = ""
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        TextField("", text: $text)
+            .textFieldStyle(.plain)
+            .font(font)
+            .focused($isFocused)
+            .onSubmit { onFinish(text) }
+            .onExitCommand { onFinish(nil) }
+            .onChange(of: isFocused) { _, isStillFocused in
+                if !isStillFocused { onFinish(text) }
+            }
+            .task {
+                text = initialText
+                isFocused = true
+            }
+            .accessibilityLabel("Nuevo nombre")
+    }
+}
+
 struct TabRow: View {
     @Bindable var model: WindowModel
     @Bindable var node: SidebarNode
@@ -95,10 +120,14 @@ struct TabRow: View {
                 SplitRowContent(model: model, split: node, isSelected: isSelected)
             } else {
                 FaviconView(url: node.liveURL, size: 16)
-                Text(node.displayTitle)
-                    .font(.system(size: 13, weight: isSelected ? .medium : .regular))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                if model.renamingNodeID == node.id {
+                    InlineRenameField(initialText: node.displayTitle, font: .system(size: 13, weight: .medium)) { model.finishRenaming(node, with: $0) }
+                } else {
+                    Text(node.displayTitle)
+                        .font(.system(size: 13, weight: isSelected ? .medium : .regular))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
                 Spacer(minLength: 0)
             }
             if isCapturing {
@@ -180,9 +209,13 @@ struct FolderRow: View {
     var body: some View {
         HStack(spacing: 8) {
             FolderIconView(symbolName: node.iconSymbol, size: 15)
-            Text(node.title.isEmpty ? "Carpeta" : node.title)
-                .font(.system(size: 13, weight: .medium))
-                .lineLimit(1)
+            if model.renamingNodeID == node.id {
+                InlineRenameField(initialText: node.title, font: .system(size: 13, weight: .medium)) { model.finishRenaming(node, with: $0) }
+            } else {
+                Text(node.title.isEmpty ? "Carpeta" : node.title)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+            }
             Spacer(minLength: 0)
             if isHovering {
                 ParsecDropdown(arrowEdge: .trailing) {
@@ -250,7 +283,9 @@ struct NodeContextMenu: View {
             Button { Clipboard.copy(url.absoluteString) } label: { Label("Copiar URL", systemImage: "link") }
         }
         if !model.isPrivate {
-            Button { NodeRenaming.prompt(node) } label: { Label("Renombrar…", systemImage: "pencil") }
+            if !isFavorite {
+                Button { model.renamingNodeID = node.id } label: { Label("Renombrar", systemImage: "pencil") }
+            }
             Divider()
             if isFavorite {
                 Button { store.move(node.id, into: .today(spaceID: model.currentSpace.id), at: 0) } label: { Label("Quitar de favoritos", systemImage: "star.slash") }
@@ -299,7 +334,7 @@ enum FolderMenu {
             .action("Convertir “\(folderName)” en Space", symbol: "square.stack", isEnabled: !model.isPrivate) { model.turnFolderIntoSpace(node) },
             .divider,
             .action("Cambiar icono…", symbol: "face.smiling") { model.folderIconEditingID = node.id },
-            .action("Renombrar…", symbol: "pencil") { NodeRenaming.prompt(node) },
+            .action("Renombrar", symbol: "pencil") { model.renamingNodeID = node.id },
             .action("Duplicar", symbol: "plus.square.on.square") { model.duplicateFolder(node) },
             .submenu("Mover a", symbol: "arrow.right.square", entries: model.spaces.filter { $0.id != model.currentSpace.id }.map { space in
                 .action(space.title, symbol: space.iconSymbol ?? "circle.fill") { store.move(node.id, into: .pinned(spaceID: space.id)) }
@@ -329,15 +364,6 @@ enum FolderActions {
         alert.buttons.first?.hasDestructiveAction = true
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         BrowserStore.shared.remove(folder.id)
-    }
-}
-
-@MainActor
-enum NodeRenaming {
-    static func prompt(_ node: SidebarNode) {
-        guard let title = TextPrompt.ask(title: "Renombrar", initialValue: node.isFolder ? node.title : node.displayTitle) else { return }
-        node.title = title
-        BrowserStore.shared.saveSoon()
     }
 }
 

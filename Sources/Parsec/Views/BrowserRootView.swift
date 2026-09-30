@@ -319,9 +319,13 @@ struct TopTabChip: View {
     var body: some View {
         HStack(spacing: 6) {
             FaviconView(url: node.liveURL ?? node.children.first?.liveURL, size: 14)
-            Text(node.isSplit ? node.children.map(\.displayTitle).joined(separator: " | ") : node.displayTitle)
-                .font(.system(size: 12, weight: isSelected ? .medium : .regular))
-                .lineLimit(1)
+            if model.renamingNodeID == node.id {
+                InlineRenameField(initialText: node.displayTitle, font: .system(size: 12, weight: .medium)) { model.finishRenaming(node, with: $0) }
+            } else {
+                Text(node.isSplit ? node.children.map(\.displayTitle).joined(separator: " | ") : node.displayTitle)
+                    .font(.system(size: 12, weight: isSelected ? .medium : .regular))
+                    .lineLimit(1)
+            }
             Spacer(minLength: 0)
             Button { model.close(node) } label: {
                 Image(systemName: "xmark")
