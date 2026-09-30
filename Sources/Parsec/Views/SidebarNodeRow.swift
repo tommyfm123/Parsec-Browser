@@ -223,12 +223,12 @@ struct FolderRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            FolderIconView(symbolName: node.iconSymbol, size: 15)
+            FolderIconView(symbolName: node.iconSymbol, size: SidebarViewMetrics.folderIconSize, weight: .semibold)
             if model.renamingNodeID == node.id {
-                InlineRenameField(initialText: node.title, font: .system(size: 13, weight: .medium)) { model.finishRenaming(node, with: $0) }
+                InlineRenameField(initialText: node.title, font: .system(size: SidebarViewMetrics.folderTitleSize, weight: .semibold)) { model.finishRenaming(node, with: $0) }
             } else {
                 Text(node.title.isEmpty ? "Carpeta" : node.title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: SidebarViewMetrics.folderTitleSize, weight: .semibold))
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
@@ -254,7 +254,7 @@ struct FolderRow: View {
         }
         .padding(.leading, 10 + CGFloat(depth) * LayoutConstants.folderIndent)
         .padding(.trailing, 8)
-        .frame(height: 32)
+        .frame(height: SidebarViewMetrics.folderRowHeight)
         .background(RowBackground(isSelected: false, isHovering: isHovering))
         .overlay(alignment: .bottomLeading) {
             if isDropTargeted {

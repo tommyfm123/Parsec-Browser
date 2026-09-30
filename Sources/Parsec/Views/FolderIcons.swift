@@ -4,11 +4,12 @@ import SwiftUI
 struct FolderIconView: View {
     let symbolName: String?
     var size: CGFloat = 16
+    var weight = Font.Weight.medium
 
     var body: some View {
         ZStack {
             Image(systemName: "folder")
-                .font(.system(size: size, weight: .medium))
+                .font(.system(size: size, weight: weight))
             if let symbolName {
                 Image(systemName: symbolName)
                     .font(.system(size: size * 0.42, weight: .bold))

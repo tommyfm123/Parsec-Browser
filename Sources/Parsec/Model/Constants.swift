@@ -68,6 +68,9 @@ enum LayoutConstants {
 
 enum SidebarViewMetrics {
     static let outerInset: CGFloat = 8
+    static let folderRowHeight: CGFloat = 38
+    static let folderIconSize: CGFloat = 19
+    static let folderTitleSize: CGFloat = 14
 }
 
 enum AssistantPanelMetrics {
