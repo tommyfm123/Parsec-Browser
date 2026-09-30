@@ -31,6 +31,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate()
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard BrowserStore.shared.settings.confirmsBeforeQuit else { return .terminateNow }
+        return QuitConfirmation.isConfirmed() ? .terminateNow : .terminateCancel
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         BrowserStore.shared.saveNow()
     }
@@ -140,6 +145,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let windowModels = ([mainWindow] + privateWindows).compactMap { $0?.model }
         let browserIDs = windowModels.reduce(into: Set<UUID>()) { $0.formUnion($1.visibleNodeIDs) }
         return browserIDs.union(littleWindows.map(\.model.node.id))
+    }
+}
+
+@MainActor
+enum QuitConfirmation {
+    static func isConfirmed() -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "¿Seguro que quieres salir de Parsec?"
+        alert.informativeText = "Se cerrarán todas las ventanas de Parsec."
+        alert.addButton(withTitle: "Salir")
+        alert.addButton(withTitle: "Cancelar")
+        return alert.runModal() == .alertFirstButtonReturn
     }
 }
 

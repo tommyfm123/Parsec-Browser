@@ -230,6 +230,7 @@ struct GeneralSettings: View {
             }
         }
         SettingsGroup(title: "Parsec") {
+            SettingsToggle(symbolName: "power", tint: .red, title: "Confirmar antes de salir", detail: "Pregunta antes de cerrar Parsec por completo.", isOn: SettingsBinding.make(\.confirmsBeforeQuit))
             SettingsItem(symbolName: "sparkles", tint: .purple, title: "Bienvenida", detail: "La presentación de Parsec, con sonido.") {
                 Button("Reproducir") { AppDelegate.shared.replayWelcome() }
             }
