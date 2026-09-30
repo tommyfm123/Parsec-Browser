@@ -6,6 +6,8 @@ struct SpacePager: View {
     @ViewState private var dragOffset: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private var isOnLastSpace: Bool { model.currentSpaceIndex == model.spaces.count - 1 }
+
     var body: some View {
         GeometryReader { geometry in
             let pageWidth = geometry.size.width
@@ -25,9 +27,18 @@ struct SpacePager: View {
             .offset(x: -CGFloat(model.currentSpaceIndex) * pageWidth + dragOffset)
             .animation(Motion.spring(reduceMotion: reduceMotion), value: model.currentSpaceIndex)
             .frame(width: pageWidth, alignment: .leading)
-            .background(SwipeMonitor(onChange: { dragOffset = rubberBand($0, width: pageWidth) }, onEnd: { finishSwipe($0, width: pageWidth) }))
+            .background(SwipeMonitor(onChange: { trackSwipe($0, width: pageWidth) }, onEnd: { finishSwipe($0, width: pageWidth) }))
+            .overlay(alignment: .center) {
+                NewSpaceSwipeIndicator(progress: model.newSpacePullProgress)
+            }
         }
         .clipped()
+    }
+
+    private func trackSwipe(_ offset: CGFloat, width: CGFloat) {
+        dragOffset = rubberBand(offset, width: width)
+        let isPullingPastEnd = isOnLastSpace && offset < 0 && !model.isPrivate
+        model.newSpacePullProgress = isPullingPastEnd ? min(-offset / (width * LayoutConstants.newSpaceSwipeThreshold), 1) : 0
     }
 
     private func rubberBand(_ offset: CGFloat, width: CGFloat) -> CGFloat {
@@ -37,12 +48,56 @@ struct SpacePager: View {
     }
 
     private func finishSwipe(_ offset: CGFloat, width: CGFloat) {
+        let shouldCreateSpace = model.newSpacePullProgress >= 1
+        model.newSpacePullProgress = 0
+        if shouldCreateSpace {
+            withAnimation(Motion.spring(reduceMotion: reduceMotion)) { dragOffset = 0 }
+            return model.isNewSpacePresented = true
+        }
         let shouldChange = abs(offset) > width * LayoutConstants.swipeCommitThreshold
         withAnimation(Motion.spring(reduceMotion: reduceMotion)) {
             dragOffset = 0
             guard shouldChange else { return }
             model.switchSpace(by: offset < 0 ? 1 : -1)
         }
+    }
+}
+
+struct NewSpaceSwipeIndicator: View {
+    private static let diameter: CGFloat = 60
+    private static let ringWidth: CGFloat = 4
+    private static let ringInset: CGFloat = 2
+
+    let progress: CGFloat
+
+    private var isReady: Bool { progress >= 1 }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ZStack {
+                Circle().fill(.regularMaterial)
+                Circle()
+                    .fill(Color.primary.opacity(0.14))
+                    .scaleEffect(progress)
+                Circle().stroke(Color.primary.opacity(0.2), lineWidth: Self.ringWidth)
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(Color.primary.opacity(0.85), style: StrokeStyle(lineWidth: Self.ringWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Image(systemName: isReady ? "checkmark" : "plus")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.primary.opacity(0.3 + 0.6 * progress))
+            }
+            .frame(width: Self.diameter - Self.ringInset, height: Self.diameter - Self.ringInset)
+            .frame(width: Self.diameter, height: Self.diameter)
+            Text(isReady ? "Suelta para crear" : "Sigue empujando")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+        }
+        .scaleEffect(0.75 + 0.25 * progress)
+        .opacity(progress > 0 ? 1 : 0)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

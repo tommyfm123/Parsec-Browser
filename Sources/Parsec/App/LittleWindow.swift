@@ -10,9 +10,9 @@ final class LittleWindowModel: WebPageHost {
     let page: WebPage
     @ObservationIgnored weak var window: NSWindow?
 
-    init(url: URL, profileID: UUID) {
+    init(url: URL?, profileID: UUID, configuration: WKWebViewConfiguration? = nil) {
         node = SidebarNode.tab(url: url)
-        page = BrowserStore.shared.ensurePage(for: node, profileID: profileID, isPrivate: false)
+        page = BrowserStore.shared.ensurePage(for: node, profileID: profileID, isPrivate: false, configuration: configuration)
         page.host = self
     }
 
@@ -30,6 +30,10 @@ final class LittleWindowModel: WebPageHost {
     func openNewTab(from page: WebPage, url: URL?, configuration: WKWebViewConfiguration?, inBackground: Bool) -> WKWebView? {
         AppDelegate.shared.showMainWindow()
         return AppDelegate.shared.mainModel?.openNewTab(from: page, url: url, configuration: configuration, inBackground: inBackground)
+    }
+
+    func openMiniWindow(from page: WebPage, url: URL?, configuration: WKWebViewConfiguration?) -> WKWebView? {
+        openNewTab(from: page, url: url, configuration: configuration, inBackground: false)
     }
 
     func openPeek(from page: WebPage, url: URL) {
@@ -80,6 +84,9 @@ final class LittleWindow: NSWindow, NSWindowDelegate {
         )
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
+        isOpaque = false
+        backgroundColor = .clear
+        minSize = LittleWindowMetrics.minimumSize
         isReleasedWhenClosed = false
         level = .floating
         tabbingMode = .disallowed
@@ -87,6 +94,19 @@ final class LittleWindow: NSWindow, NSWindowDelegate {
         contentView = NSHostingView(rootView: LittleBrowserView(model: model))
         model.window = self
         center()
+        layoutTrafficLights()
+    }
+
+    func layoutTrafficLights() {
+        positionTrafficLights(centerY: LittleWindowMetrics.toolbarHeight / 2, leadingInset: LittleWindowMetrics.trafficLightsLeadingInset)
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        layoutTrafficLights()
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        layoutTrafficLights()
     }
 
     func windowWillClose(_ notification: Notification) {

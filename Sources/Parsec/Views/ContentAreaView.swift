@@ -68,6 +68,11 @@ struct PaneWebContent: View {
     let cornerRadius: CGFloat
     let roundsTopCorners: Bool
 
+    private func loadIfVisible() {
+        guard model.visibleNodeIDs.contains(node.id) else { return }
+        model.loadPage(for: node)
+    }
+
     var body: some View {
         if let page = node.page {
             ZStack {
@@ -87,7 +92,7 @@ struct PaneWebContent: View {
         } else {
             UnevenRoundedRectangle(cornerRadii: paneRadii(cornerRadius, roundsTopCorners: roundsTopCorners), style: .continuous)
                 .fill(Color(nsColor: .textBackgroundColor))
-                .onAppear { model.loadPage(for: node) }
+                .onAppear { loadIfVisible() }
         }
     }
 }

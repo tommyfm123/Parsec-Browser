@@ -21,6 +21,7 @@ final class SidebarNode: Identifiable, @MainActor Codable {
     var lastActiveAt: Date
     var iconSymbol: String?
     var conversationID: UUID?
+    var customTitle: String?
 
     var page: WebPage?
 
@@ -34,6 +35,7 @@ final class SidebarNode: Identifiable, @MainActor Codable {
         case _lastActiveAt = "lastActiveAt"
         case _iconSymbol = "iconSymbol"
         case _conversationID = "conversationID"
+        case _customTitle = "customTitle"
     }
 
     init(kind: Kind, title: String, url: URL? = nil, children: [SidebarNode] = [], isExpanded: Bool = true) {
@@ -61,6 +63,7 @@ final class SidebarNode: Identifiable, @MainActor Codable {
     func duplicated() -> SidebarNode {
         let copy = SidebarNode(kind: kind, title: title, url: url, children: children.map { $0.duplicated() }, isExpanded: isExpanded)
         copy.iconSymbol = iconSymbol
+        copy.customTitle = customTitle
         return copy
     }
 
@@ -69,6 +72,7 @@ final class SidebarNode: Identifiable, @MainActor Codable {
     var isSplit: Bool { kind == .split }
 
     var displayTitle: String {
+        if let customTitle, !customTitle.isEmpty { return customTitle }
         let liveTitle = page?.title ?? ""
         if !liveTitle.isEmpty { return liveTitle }
         if !title.isEmpty { return title }

@@ -23,11 +23,15 @@ struct SidebarNodeRow: View {
                     ))
                 }
             }
-            .clipped()
+            .mask { Rectangle().padding(.vertical, -SidebarDropMetrics.indicatorOverhang) }
         case .tab, .split:
             TabRow(model: model, node: node, depth: depth)
         }
     }
+}
+
+enum SidebarDropMetrics {
+    static let indicatorOverhang: CGFloat = 6
 }
 
 struct RowBackground: View {
@@ -68,12 +72,37 @@ extension View {
         overlay(alignment: .topLeading) {
             if isVisible {
                 DropIndicator(axis: axis)
-                    .frame(maxWidth: axis == .horizontal ? .infinity : nil, maxHeight: axis == .vertical ? .infinity : nil)
                     .padding(.leading, axis == .horizontal ? leadingInset : 0)
+                    .frame(maxWidth: axis == .horizontal ? .infinity : nil, maxHeight: axis == .vertical ? .infinity : nil, alignment: .topLeading)
                     .offset(x: axis == .vertical ? -5 : 0, y: axis == .horizontal ? -5 : 0)
             }
         }
         .animation(.snappy(duration: 0.15), value: isVisible)
+    }
+}
+
+struct InlineRenameField: View {
+    let initialText: String
+    let font: Font
+    let onFinish: (String?) -> Void
+    @ViewState private var text = ""
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        TextField("", text: $text)
+            .textFieldStyle(.plain)
+            .font(font)
+            .focused($isFocused)
+            .onSubmit { onFinish(text) }
+            .onExitCommand { onFinish(nil) }
+            .onChange(of: isFocused) { _, isStillFocused in
+                if !isStillFocused { onFinish(text) }
+            }
+            .task {
+                text = initialText
+                isFocused = true
+            }
+            .accessibilityLabel("Nuevo nombre")
     }
 }
 
@@ -88,36 +117,57 @@ struct TabRow: View {
     private var isLoaded: Bool { node.allTabs.contains { $0.page != nil } }
     private var isCapturing: Bool { node.allTabs.contains { $0.page?.isCapturingMedia == true } }
     private var isToday: Bool { model.isTodayNode(node) }
+    private var closesTab: Bool { isToday || isLoaded }
+    private var closeSymbol: String { closesTab && !isToday ? "minus" : "xmark" }
+    private var closeLabel: String {
+        if isToday { return "Cerrar" }
+        return isLoaded ? "Cerrar pestaña" : "Quitar de la carpeta"
+    }
+
+    private func performCloseAction() {
+        guard closesTab else { return BrowserStore.shared.remove(node.id) }
+        model.close(node)
+    }
 
     var body: some View {
-        HStack(spacing: 8) {
-            if node.isSplit {
-                SplitRowContent(model: model, split: node, isSelected: isSelected)
-            } else {
-                FaviconView(url: node.liveURL, size: 16)
-                Text(node.displayTitle)
-                    .font(.system(size: 13, weight: isSelected ? .medium : .regular))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 0)
+        HStack(spacing: 0) {
+            HStack(spacing: 8) {
+                if node.isSplit {
+                    SplitRowContent(model: model, split: node, isSelected: isSelected)
+                } else {
+                    FaviconView(url: node.liveURL, size: 16)
+                    if model.renamingNodeID == node.id {
+                        InlineRenameField(initialText: node.displayTitle, font: .system(size: 13, weight: .medium)) { model.finishRenaming(node, with: $0) }
+                    } else {
+                        Text(node.displayTitle)
+                            .font(.system(size: 13, weight: isSelected ? .medium : .regular))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    Spacer(minLength: 0)
+                }
             }
+            .padding(.leading, 10 + CGFloat(depth) * LayoutConstants.folderIndent)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture { model.select(node) }
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
             if isCapturing {
                 Circle().fill(Color.red).frame(width: 6, height: 6).accessibilityLabel("Usando cámara o micrófono")
             }
-            if isHovering && (isToday || isLoaded) {
-                Button { model.close(node) } label: {
-                    Image(systemName: isToday ? "xmark" : "minus")
+            if isHovering {
+                Button(action: performCloseAction) {
+                    Image(systemName: closeSymbol)
                         .font(.system(size: 10, weight: .bold))
-                        .frame(width: 20, height: 20)
+                        .frame(width: 24, height: 24)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .help(isToday ? "Cerrar" : "Descargar de memoria")
-                .accessibilityLabel(isToday ? "Cerrar" : "Descargar de memoria")
+                .help(closeLabel)
+                .accessibilityLabel(closeLabel)
             }
         }
-        .padding(.leading, 10 + CGFloat(depth) * LayoutConstants.folderIndent)
         .padding(.trailing, 6)
         .frame(height: 34)
         .background(RowBackground(isSelected: isSelected, isHovering: isHovering))
@@ -125,10 +175,8 @@ struct TabRow: View {
         .contentShape(Rectangle())
         .transition(.opacity.combined(with: .scale(scale: 0.92)))
         .clickable()
-        .onTapGesture { model.select(node) }
         .onHover { isHovering = $0 }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityElement(children: .contain)
         .draggable(node.id.uuidString)
         .dropDestination(for: String.self) { items, _ in
             SidebarDrop.handle(items, model: model, onto: node)
@@ -179,10 +227,14 @@ struct FolderRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            FolderIconView(symbolName: node.iconSymbol, size: 15)
-            Text(node.title.isEmpty ? "Carpeta" : node.title)
-                .font(.system(size: 13, weight: .medium))
-                .lineLimit(1)
+            FolderIconView(symbolName: node.iconSymbol, size: SidebarViewMetrics.folderIconSize, weight: .semibold)
+            if model.renamingNodeID == node.id {
+                InlineRenameField(initialText: node.title, font: .system(size: SidebarViewMetrics.folderTitleSize, weight: .semibold)) { model.finishRenaming(node, with: $0) }
+            } else {
+                Text(node.title.isEmpty ? "Carpeta" : node.title)
+                    .font(.system(size: SidebarViewMetrics.folderTitleSize, weight: .semibold))
+                    .lineLimit(1)
+            }
             Spacer(minLength: 0)
             if isHovering {
                 ParsecDropdown(arrowEdge: .trailing) {
@@ -206,7 +258,7 @@ struct FolderRow: View {
         }
         .padding(.leading, 10 + CGFloat(depth) * LayoutConstants.folderIndent)
         .padding(.trailing, 8)
-        .frame(height: 32)
+        .frame(height: SidebarViewMetrics.folderRowHeight)
         .background(RowBackground(isSelected: false, isHovering: isHovering))
         .overlay(alignment: .bottomLeading) {
             if isDropTargeted {
@@ -250,7 +302,9 @@ struct NodeContextMenu: View {
             Button { Clipboard.copy(url.absoluteString) } label: { Label("Copiar URL", systemImage: "link") }
         }
         if !model.isPrivate {
-            Button { NodeRenaming.prompt(node) } label: { Label("Renombrar…", systemImage: "pencil") }
+            if !isFavorite {
+                Button { model.renamingNodeID = node.id } label: { Label("Renombrar", systemImage: "pencil") }
+            }
             Divider()
             if isFavorite {
                 Button { store.move(node.id, into: .today(spaceID: model.currentSpace.id), at: 0) } label: { Label("Quitar de favoritos", systemImage: "star.slash") }
@@ -299,7 +353,7 @@ enum FolderMenu {
             .action("Convertir “\(folderName)” en Space", symbol: "square.stack", isEnabled: !model.isPrivate) { model.turnFolderIntoSpace(node) },
             .divider,
             .action("Cambiar icono…", symbol: "face.smiling") { model.folderIconEditingID = node.id },
-            .action("Renombrar…", symbol: "pencil") { NodeRenaming.prompt(node) },
+            .action("Renombrar", symbol: "pencil") { model.renamingNodeID = node.id },
             .action("Duplicar", symbol: "plus.square.on.square") { model.duplicateFolder(node) },
             .submenu("Mover a", symbol: "arrow.right.square", entries: model.spaces.filter { $0.id != model.currentSpace.id }.map { space in
                 .action(space.title, symbol: space.iconSymbol ?? "circle.fill") { store.move(node.id, into: .pinned(spaceID: space.id)) }
@@ -329,15 +383,6 @@ enum FolderActions {
         alert.buttons.first?.hasDestructiveAction = true
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         BrowserStore.shared.remove(folder.id)
-    }
-}
-
-@MainActor
-enum NodeRenaming {
-    static func prompt(_ node: SidebarNode) {
-        guard let title = TextPrompt.ask(title: "Renombrar", initialValue: node.isFolder ? node.title : node.displayTitle) else { return }
-        node.title = title
-        BrowserStore.shared.saveSoon()
     }
 }
 

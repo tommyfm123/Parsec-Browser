@@ -27,12 +27,18 @@ enum PermissionKind: String {
 @MainActor
 protocol WebPageHost: AnyObject {
     func openNewTab(from page: WebPage, url: URL?, configuration: WKWebViewConfiguration?, inBackground: Bool) -> WKWebView?
+    func openMiniWindow(from page: WebPage, url: URL?, configuration: WKWebViewConfiguration?) -> WKWebView?
     func openPeek(from page: WebPage, url: URL)
     func closePage(_ page: WebPage)
     func requestPermission(host: String, kind: PermissionKind, page: WebPage) async -> Bool
     func offerPasswordSave(host: String, username: String, password: String)
     func suggestPasswordFill(for page: WebPage)
     func presentingWindow() -> NSWindow?
+    func linkPreviewDidChange(_ event: LinkPreviewEvent, from page: WebPage)
+}
+
+extension WebPageHost {
+    func linkPreviewDidChange(_ event: LinkPreviewEvent, from page: WebPage) {}
 }
 
 extension WebPageHost {
@@ -54,6 +60,7 @@ final class WebPage: NSObject {
     private static let faviconScript = "return document.querySelector(\"link[rel~='icon']\")?.href ?? null;"
     private static let fillScript = "return window.parsecFillCredentials(username, password);"
     private static let cancelledErrorCodes: Set<Int> = [NSURLErrorCancelled, 102]
+    private static let middleMouseButtonNumbers: Set<Int> = [2, 4]
 
     let webView: WKWebView
     let profileID: UUID
@@ -202,6 +209,13 @@ final class WebPage: NSObject {
         host.replacingOccurrences(of: WebConstants.wwwPrefix, with: "")
     }
 
+    private func openLinkInNewContext(url: URL?, configuration: WKWebViewConfiguration?, inBackground: Bool) -> WKWebView? {
+        guard !isPrivate, BrowserStore.shared.settings.linkOpening == .miniWindow else {
+            return host?.openNewTab(from: self, url: url, configuration: configuration, inBackground: inBackground)
+        }
+        return host?.openMiniWindow(from: self, url: url, configuration: configuration)
+    }
+
     private func recordVisit() {
         guard !isPrivate, let url = currentURL, url.scheme?.hasPrefix(WebConstants.httpScheme) == true else { return }
         BrowserStore.shared.history.recordVisit(profileID: profileID, url: url, title: title)
@@ -245,8 +259,9 @@ extension WebPage: WKNavigationDelegate {
             loadRequest(secureURL)
             return .cancel
         }
-        if action.navigationType == .linkActivated, action.modifierFlags.contains(.command) {
-            _ = host?.openNewTab(from: self, url: url, configuration: nil, inBackground: true)
+        let opensInNewContext = action.modifierFlags.contains(.command) || Self.middleMouseButtonNumbers.contains(action.buttonNumber)
+        if action.navigationType == .linkActivated, opensInNewContext {
+            _ = openLinkInNewContext(url: url, configuration: nil, inBackground: true)
             return .cancel
         }
         if shouldPeek(action, url: url) {
@@ -297,7 +312,10 @@ extension WebPage: WKNavigationDelegate {
 
 extension WebPage: WKUIDelegate {
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        host?.openNewTab(from: self, url: navigationAction.request.url, configuration: configuration, inBackground: false)
+        guard navigationAction.navigationType == .linkActivated else {
+            return host?.openNewTab(from: self, url: navigationAction.request.url, configuration: configuration, inBackground: false)
+        }
+        return openLinkInNewContext(url: navigationAction.request.url, configuration: configuration, inBackground: false)
     }
 
     func webViewDidClose(_ webView: WKWebView) {

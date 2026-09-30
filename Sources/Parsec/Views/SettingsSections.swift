@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 enum SettingsSection: String, CaseIterable, Identifiable {
     case general = "General"
+    case appearance = "Apariencia"
     case aboutYou = "Sobre ti"
     case profiles = "Perfiles"
     case spaces = "Spaces"
@@ -20,6 +21,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var symbolName: String {
         switch self {
         case .general: "gearshape"
+        case .appearance: "paintbrush"
         case .aboutYou: "person.text.rectangle"
         case .profiles: "person.crop.circle"
         case .spaces: "square.stack"
@@ -64,6 +66,7 @@ struct SettingsView: View {
     private var sectionContent: some View {
         switch selection {
         case .general: GeneralSettings()
+        case .appearance: AppearanceSettings()
         case .aboutYou: AboutYouSettings()
         case .profiles: ProfileSettings()
         case .spaces: SpaceSettings()
@@ -95,7 +98,7 @@ struct SettingsTabBar: View {
                             Text(section.rawValue).font(.system(size: 10.5, weight: .medium))
                         }
                         .foregroundStyle(selection == section ? Color.accentColor : Color.secondary)
-                        .frame(width: 68, height: 50)
+                        .frame(width: 64, height: 50)
                         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(selection == section ? 0.07 : 0)))
                         .contentShape(Rectangle())
                     }
@@ -230,6 +233,8 @@ struct GeneralSettings: View {
             }
         }
         SettingsGroup(title: "Parsec") {
+            SettingsToggle(symbolName: "arrow.counterclockwise", tint: .green, title: "Restaurar la sesión anterior", detail: "Al abrir Parsec, recupera la ventana, las pestañas de hoy y la pestaña que tenías abierta. Se aplica al próximo inicio.", isOn: SettingsBinding.make(\.restoresPreviousSession))
+            SettingsToggle(symbolName: "power", tint: .red, title: "Confirmar antes de salir", detail: "Pregunta antes de cerrar Parsec por completo.", isOn: SettingsBinding.make(\.confirmsBeforeQuit))
             SettingsItem(symbolName: "sparkles", tint: .purple, title: "Bienvenida", detail: "La presentación de Parsec, con sonido.") {
                 Button("Reproducir") { AppDelegate.shared.replayWelcome() }
             }
@@ -258,6 +263,59 @@ struct GeneralSettings: View {
         } catch {
             statusMessage = "No se pudo leer el sidebar de Arc: \(error.localizedDescription)"
         }
+    }
+}
+
+struct AppearanceSettings: View {
+    private static let tileSize: CGFloat = 76
+    private static let columns = [GridItem(.adaptive(minimum: 104), spacing: 14)]
+
+    @ViewState private var selectedID = BrowserStore.shared.settings.appIconID
+
+    var body: some View {
+        SettingsGroup(title: "Ícono de la app", footer: "El ícono elegido se usa en el Dock y en el selector de apps, y se mantiene al reiniciar Parsec.") {
+            LazyVGrid(columns: Self.columns, alignment: .leading, spacing: 14) {
+                ForEach(AppIconCatalog.options) { option in
+                    AppIconTile(option: option, isSelected: option.id == selectedID, size: Self.tileSize) { select(option) }
+                }
+            }
+            .padding(.vertical, 6)
+        }
+    }
+
+    private func select(_ option: AppIconOption) {
+        selectedID = option.id
+        BrowserStore.shared.settings.appIconID = option.id
+        BrowserStore.shared.saveSoon()
+        AppIconCatalog.applySelected()
+    }
+}
+
+struct AppIconTile: View {
+    let option: AppIconOption
+    let isSelected: Bool
+    let size: CGFloat
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(nsImage: option.image)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: size, height: size)
+                    .padding(6)
+                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.accentColor, lineWidth: isSelected ? 2.5 : 0))
+                Text(option.title)
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                    .lineLimit(1)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(option.title)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -1126,7 +1184,17 @@ struct DocumentSettings: View {
 }
 
 struct AdvancedSettings: View {
-    private static let suspendOptions = [15, 30, 60, 0]
+    private static let suspendOptions = [1, 5, 10, 15, 60, 0]
+    private static let revealDelayOptions = [0, 100, 200, 350, 500]
+    private static let previewDelayOptions = [300, 500, 700, 1000]
+
+    private static func suspendLabel(_ minutes: Int) -> String {
+        switch minutes {
+        case 0: "Nunca"
+        case 1: "1 minuto"
+        default: "\(minutes) minutos"
+        }
+    }
 
     private var developerModeBinding: Binding<Bool> {
         Binding(
@@ -1142,12 +1210,26 @@ struct AdvancedSettings: View {
     var body: some View {
         SettingsGroup {
             SettingsToggle(symbolName: "speaker.wave.2.fill", tint: .blue, title: "Sonidos de Parsec", isOn: SettingsBinding.make(\.playsSounds))
+            SettingsItem(symbolName: "sidebar.squares.left", tint: .orange, title: "Retraso al abrir los paneles", detail: "Tiempo que el cursor debe quedarse en el borde para mostrar el sidebar o el panel de IA.") {
+                ParsecSelect(selection: SettingsBinding.make(\.edgeRevealDelayMilliseconds), options: Self.revealDelayOptions.map { ($0, $0 == 0 ? "Inmediato" : "\($0) ms") }, width: 120)
+            }
+            SettingsToggle(symbolName: "eye", tint: .cyan, title: "Vista previa de links", detail: "Al dejar el cursor sobre un link, muestra una miniatura de la página sin abrirla.", isOn: SettingsBinding.make(\.showsLinkPreviews))
+            SettingsItem(symbolName: "timer", tint: .cyan, title: "Retraso de la vista previa", detail: "Cuánto debe quedarse el cursor sobre el link.") {
+                ParsecSelect(selection: SettingsBinding.make(\.linkPreviewDelayMilliseconds), options: Self.previewDelayOptions.map { ($0, "\($0) ms") }, width: 120)
+            }
+            SettingsItem(symbolName: "rectangle.expand.vertical", tint: .cyan, title: "Tamaño de la vista previa") {
+                ParsecSelect(selection: SettingsBinding.make(\.linkPreviewSize), options: LinkPreviewSize.allCases.map { ($0, $0.title) }, width: 120)
+            }
+            SettingsToggle(symbolName: "pip.enter", tint: .pink, title: "Imagen en imagen automática", detail: "Al salir de una pestaña que reproduce video, el video pasa a una ventana flotante.", isOn: SettingsBinding.make(\.autoPictureInPicture))
             SettingsToggle(symbolName: "link", tint: .gray, title: "Mostrar la URL completa", detail: "En la barra de dirección, en lugar del dominio.", isOn: SettingsBinding.make(\.showsFullURL))
         }
         SettingsGroup {
+            SettingsItem(symbolName: "cursorarrow.click.2", tint: .teal, title: "Abrir links en", detail: "Qué pasa al hacer clic con la rueda o con ⌘ sobre un link, o al abrir uno que pide una ventana nueva.") {
+                ParsecSelect(selection: SettingsBinding.make(\.linkOpening), options: LinkOpeningBehavior.allCases.map { ($0, $0.title) }, width: 150)
+            }
             SettingsToggle(symbolName: "macwindow.on.rectangle", tint: .green, title: "Links externos en ventana flotante", detail: "Si está apagado, se abren como pestaña en el Space activo.", isOn: SettingsBinding.make(\.opensExternalLinksInLittleWindow))
-            SettingsItem(symbolName: "moon.zzz.fill", tint: .indigo, title: "Suspender pestañas inactivas", detail: "Libera memoria. No suspende las que reproducen audio o video.") {
-                ParsecSelect(selection: SettingsBinding.make(\.suspendAfterMinutes), options: Self.suspendOptions.map { ($0, $0 == 0 ? "Nunca" : "\($0) minutos") }, width: 120)
+            SettingsItem(symbolName: "moon.zzz.fill", tint: .indigo, title: "Suspender pestañas inactivas", detail: "Cierra el proceso de la página para liberar memoria y CPU; se recarga al volver. No suspende las que reproducen audio o video.") {
+                ParsecSelect(selection: SettingsBinding.make(\.suspendAfterMinutes), options: Self.suspendOptions.map { ($0, Self.suspendLabel($0)) }, width: 120)
             }
         }
         SettingsGroup(title: "Desarrollador", footer: "Se aplica a las pestañas que abras a partir de ahora.") {

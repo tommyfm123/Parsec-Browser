@@ -116,15 +116,21 @@ struct AgentTab: View {
     let action: () -> Void
     let onClose: () -> Void
     @ViewState private var isHovering = false
+    @ViewState private var isRenaming = false
 
     var body: some View {
         HStack(spacing: 6) {
             AgentStatusIndicator(isRunning: agent.isRunning, hasUnseenResult: agent.hasUnseenResult)
-            Text(agent.title)
-                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                .lineLimit(1)
-                .frame(maxWidth: 120, alignment: .leading)
-            if canClose && isHovering {
+            if isRenaming {
+                InlineRenameField(initialText: agent.title, font: .system(size: 12, weight: .semibold), onFinish: finishRenaming)
+                    .frame(width: 120)
+            } else {
+                Text(agent.title)
+                    .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                    .lineLimit(1)
+                    .frame(maxWidth: 120, alignment: .leading)
+            }
+            if canClose && isHovering && !isRenaming {
                 Button(action: onClose) {
                     Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).frame(width: 14, height: 14)
                 }
@@ -141,8 +147,20 @@ struct AgentTab: View {
         .onTapGesture(perform: action)
         .onHover { isHovering = $0 }
         .clickable()
+        .contextMenu {
+            Button { isRenaming = true } label: { Label("Renombrar", systemImage: "pencil") }
+            Button(role: .destructive, action: onClose) { Label("Cerrar", systemImage: "xmark") }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func finishRenaming(_ newName: String?) {
+        guard isRenaming else { return }
+        isRenaming = false
+        guard let newName else { return }
+        let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        agent.customTitle = trimmedName.isEmpty ? nil : trimmedName
     }
 }
 

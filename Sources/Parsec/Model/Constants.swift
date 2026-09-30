@@ -38,12 +38,17 @@ enum StorageConstants {
     }
 }
 
+enum AppIconConstants {
+    static let defaultID = "default"
+}
+
 enum LifecycleConstants {
     static let archiveTodayAfter: TimeInterval = 12 * 60 * 60
     static let lifecycleTickInterval: TimeInterval = 60
     static let saveDebounce: Duration = .milliseconds(800)
     static let suggestionDebounce: Duration = .milliseconds(150)
     static let toastDuration: Duration = .milliseconds(1600)
+    static let linkPreviewDismissGrace: Duration = .milliseconds(120)
     static let maxSplitPanes = 4
     static let maxRecentlyClosed = 30
     static let commandBarResultLimit = 8
@@ -58,15 +63,27 @@ enum LayoutConstants {
     static let trafficLightsHeight: CGFloat = 30
     static let commandBarWidth: CGFloat = 640
     static let peekScale: CGFloat = 0.85
-    static let littleWindowSize = CGSize(width: 960, height: 680)
+    static let littleWindowSize = CGSize(width: 900, height: 640)
     static let mainWindowSize = CGSize(width: 1400, height: 900)
     static let rowCornerRadius: CGFloat = 8
     static let folderIndent: CGFloat = 14
     static let swipeCommitThreshold: CGFloat = 0.28
+    static let newSpaceSwipeThreshold: CGFloat = 0.4
+}
+
+enum LittleWindowMetrics {
+    static let toolbarHeight: CGFloat = 46
+    static let contentInset: CGFloat = 8
+    static let trafficLightsLeadingInset: CGFloat = 16
+    static let trafficLightsReservedWidth: CGFloat = 78
+    static let minimumSize = CGSize(width: 520, height: 360)
 }
 
 enum SidebarViewMetrics {
     static let outerInset: CGFloat = 8
+    static let folderRowHeight: CGFloat = 38
+    static let folderIconSize: CGFloat = 19
+    static let folderTitleSize: CGFloat = 14
 }
 
 enum AssistantPanelMetrics {

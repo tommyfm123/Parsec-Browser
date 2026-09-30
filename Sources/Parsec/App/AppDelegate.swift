@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import WebKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -21,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.visibleNodeIDs = { [weak self] in self?.visibleNodeIDs() ?? [] }
         store.startLifecycle()
         NSApp.mainMenu = MainMenu.build()
+        AppIconCatalog.applySelected()
         #if DEBUG
         DebugBridge.start()
         #endif
@@ -29,6 +31,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pendingURLs.forEach(openExternalURL)
         pendingURLs.removeAll()
         NSApp.activate()
+    }
+
+    func applicationDidResignActive(_ notification: Notification) {
+        mainModel?.setPictureInPictureForVisibleTabs(isEntering: true)
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        mainModel?.setPictureInPictureForVisibleTabs(isEntering: false)
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard BrowserStore.shared.settings.confirmsBeforeQuit else { return .terminateNow }
+        return QuitConfirmation.isConfirmed() ? .terminateNow : .terminateCancel
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -87,11 +102,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func openLittleWindow(for url: URL) {
         let profileID = BrowserStore.shared.space(id: BrowserStore.shared.lastSpaceID)?.profileID ?? BrowserStore.shared.profiles[0].id
-        let window = LittleWindow(model: LittleWindowModel(url: url, profileID: profileID))
+        openLittleWindow(for: url, profileID: profileID)
+    }
+
+    @discardableResult
+    func openLittleWindow(for url: URL?, profileID: UUID, configuration: WKWebViewConfiguration? = nil) -> LittleWindow {
+        let window = LittleWindow(model: LittleWindowModel(url: url, profileID: profileID, configuration: configuration))
         window.onClose = { [weak self, weak window] in self?.littleWindows.removeAll { $0 === window } }
         littleWindows.append(window)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate()
+        return window
     }
 
     func adoptIntoMainWindow(_ node: SidebarNode) {
@@ -140,6 +161,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let windowModels = ([mainWindow] + privateWindows).compactMap { $0?.model }
         let browserIDs = windowModels.reduce(into: Set<UUID>()) { $0.formUnion($1.visibleNodeIDs) }
         return browserIDs.union(littleWindows.map(\.model.node.id))
+    }
+}
+
+@MainActor
+enum QuitConfirmation {
+    static func isConfirmed() -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "¿Seguro que quieres salir de Parsec?"
+        alert.informativeText = "Se cerrarán todas las ventanas de Parsec."
+        alert.addButton(withTitle: "Salir")
+        alert.addButton(withTitle: "Cancelar")
+        return alert.runModal() == .alertFirstButtonReturn
     }
 }
 

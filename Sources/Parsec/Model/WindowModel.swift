@@ -22,6 +22,11 @@ struct PeekState: Identifiable {
     let node: SidebarNode
 }
 
+enum RevealEdge {
+    case sidebar
+    case assistant
+}
+
 enum CommandBarMode: Equatable {
     case newTab
     case navigateCurrent
@@ -61,13 +66,19 @@ final class WindowModel: WebPageHost {
     var isAssistantPresented = false
     var isAssistantHovering = false
     var folderIconEditingID: UUID?
+    var renamingNodeID: UUID?
     var spaceIconEditingID: UUID?
     var isWelcomePresented = false
     var agents: [AssistantModel] = []
     var activeAgentID: UUID?
     var pageConversations: [UUID: AssistantModel] = [:]
     var isHistoryPresented = false
+    var linkPreview: LinkPreviewState?
+    var newSpacePullProgress: CGFloat = 0
     @ObservationIgnored private var previousSelectionID: UUID?
+    @ObservationIgnored private var pendingReveals: [RevealEdge: Task<Void, Never>] = [:]
+    @ObservationIgnored private var linkPreviewShowTask: Task<Void, Never>?
+    @ObservationIgnored private var linkPreviewDismissTask: Task<Void, Never>?
 
     init(isPrivate: Bool = false) {
         self.isPrivate = isPrivate
@@ -153,6 +164,10 @@ final class WindowModel: WebPageHost {
 extension WindowModel {
     func select(_ node: SidebarNode) {
         guard !node.isFolder else { return }
+        if currentSpace.selectedNodeID != node.id {
+            handOffPictureInPicture(from: selectedNode, to: node)
+            dismissLinkPreview()
+        }
         fillSuggestionHost = nil
         restoreConversation(for: node)
         if currentSpace.selectedNodeID != node.id { previousSelectionID = currentSpace.selectedNodeID }
@@ -165,6 +180,17 @@ extension WindowModel {
         focusedPaneID = node.isSplit ? node.children.first?.id : node.id
         isFindBarVisible = false
         store.saveSoon()
+    }
+
+    func handOffPictureInPicture(from leavingNode: SidebarNode?, to enteringNode: SidebarNode?) {
+        guard store.settings.autoPictureInPicture, leavingNode?.id != enteringNode?.id else { return }
+        leavingNode?.allTabs.forEach { AutoPictureInPicture.enter($0.page) }
+        enteringNode?.allTabs.forEach { AutoPictureInPicture.exit($0.page) }
+    }
+
+    func setPictureInPictureForVisibleTabs(isEntering: Bool) {
+        guard store.settings.autoPictureInPicture else { return }
+        selectedNode?.allTabs.forEach { isEntering ? AutoPictureInPicture.enter($0.page) : AutoPictureInPicture.exit($0.page) }
     }
 
     func focusPane(_ paneID: UUID) {
@@ -184,7 +210,9 @@ extension WindowModel {
     }
 
     func switchToSpace(_ space: Space) {
+        let leavingNode = selectedNode
         selectedSpaceID = space.id
+        handOffPictureInPicture(from: leavingNode, to: selectedNode)
         if !isPrivate { store.lastSpaceID = space.id }
         if let selectedNode { select(selectedNode) }
         store.saveSoon()
@@ -286,6 +314,19 @@ extension WindowModel {
         guard isSelected else { return }
         currentSpace.selectedNodeID = nil
         if let fallback { select(fallback) }
+    }
+
+    func finishRenaming(_ node: SidebarNode, with newName: String?) {
+        guard renamingNodeID == node.id else { return }
+        renamingNodeID = nil
+        guard let newName else { return }
+        let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if node.isFolder {
+            if !trimmedName.isEmpty { node.title = trimmedName }
+        } else {
+            node.customTitle = trimmedName.isEmpty ? nil : trimmedName
+        }
+        store.saveSoon()
     }
 
     func reopenClosedTab() {
@@ -429,6 +470,10 @@ extension WindowModel {
     }
 
     func dismissTransientUI() -> Bool {
+        if linkPreview != nil {
+            dismissLinkPreview()
+            return true
+        }
         if isHistoryPresented {
             isHistoryPresented = false
             return true
@@ -509,14 +554,49 @@ extension WindowModel {
             let usesSidebar = store.settings.layout == .sidebar
             let pointerDistance = usesSidebar ? location.x : (window?.contentView?.bounds.height ?? 0) - location.y
             let chromeExtent = usesSidebar ? sidebarWidth + SidebarViewMetrics.outerInset : LayoutConstants.topBarHeight
-            if pointerDistance <= revealDistance, !isSidebarHovering { isSidebarHovering = true }
+            if pointerDistance <= revealDistance { scheduleReveal(.sidebar) } else { cancelReveal(.sidebar) }
             if isSidebarHovering, pointerDistance > chromeExtent + dismissMargin, !isOverlayOpen { isSidebarHovering = false }
         }
         guard !isAssistantPresented else { return }
         let distanceFromRight = windowWidth - location.x
-        if distanceFromRight <= revealDistance, !isAssistantHovering, !isShowingStartPage { isAssistantHovering = true }
+        if distanceFromRight <= revealDistance, !isShowingStartPage { scheduleReveal(.assistant) } else { cancelReveal(.assistant) }
         let assistantEdge = AssistantPanelMetrics.width + SidebarViewMetrics.outerInset * 2 + dismissMargin
         if isAssistantHovering, distanceFromRight > assistantEdge, !isOverlayOpen { isAssistantHovering = false }
+    }
+
+    func scheduleReveal(_ edge: RevealEdge) {
+        guard pendingReveals[edge] == nil, !isRevealed(edge) else { return }
+        let delay = store.settings.edgeRevealDelayMilliseconds
+        guard delay > 0 else { return reveal(edge) }
+        pendingReveals[edge] = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(delay))
+            guard !Task.isCancelled else { return }
+            self?.reveal(edge)
+        }
+    }
+
+    func cancelReveal(_ edge: RevealEdge) {
+        pendingReveals[edge]?.cancel()
+        pendingReveals[edge] = nil
+    }
+
+    func updateReveal(_ edge: RevealEdge, isPointerInside: Bool) {
+        if isPointerInside { scheduleReveal(edge) } else { cancelReveal(edge) }
+    }
+
+    private func isRevealed(_ edge: RevealEdge) -> Bool {
+        switch edge {
+        case .sidebar: isSidebarHovering
+        case .assistant: isAssistantHovering
+        }
+    }
+
+    private func reveal(_ edge: RevealEdge) {
+        pendingReveals[edge] = nil
+        switch edge {
+        case .sidebar: isSidebarHovering = true
+        case .assistant: isAssistantHovering = true
+        }
     }
 
     var assistant: AssistantModel {
@@ -615,6 +695,10 @@ extension WindowModel {
         return newPage.webView
     }
 
+    func openMiniWindow(from page: WebPage, url: URL?, configuration: WKWebViewConfiguration?) -> WKWebView? {
+        AppDelegate.shared.openLittleWindow(for: url, profileID: page.profileID, configuration: configuration).model.page.webView
+    }
+
     func openPeek(from page: WebPage, url: URL) {
         closePeek()
         let node = SidebarNode.tab(url: url)
@@ -654,5 +738,58 @@ extension WindowModel {
 
     func presentingWindow() -> NSWindow? {
         window
+    }
+}
+
+extension WindowModel {
+    func linkPreviewDidChange(_ event: LinkPreviewEvent, from page: WebPage) {
+        guard store.settings.showsLinkPreviews, selectedNode?.allTabs.contains(where: { $0.page === page }) == true else { return }
+        switch event {
+        case .enter(let request): scheduleLinkPreview(request, from: page)
+        case .leave: scheduleLinkPreviewDismissal()
+        case .dismiss: dismissLinkPreview()
+        }
+    }
+
+    func dismissLinkPreview() {
+        linkPreviewShowTask?.cancel()
+        linkPreviewDismissTask?.cancel()
+        linkPreview?.tearDown()
+        linkPreview = nil
+    }
+
+    private func scheduleLinkPreview(_ request: LinkPreviewRequest, from page: WebPage) {
+        linkPreviewShowTask?.cancel()
+        linkPreviewDismissTask?.cancel()
+        guard linkPreview?.url != request.url else { return }
+        let anchorFrame = windowFrame(of: request.anchorRect, in: page.webView)
+        let delay = Duration.milliseconds(store.settings.linkPreviewDelayMilliseconds)
+        linkPreviewShowTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            self?.showLinkPreview(url: request.url, anchorFrame: anchorFrame)
+        }
+    }
+
+    private func scheduleLinkPreviewDismissal() {
+        linkPreviewShowTask?.cancel()
+        linkPreviewDismissTask?.cancel()
+        guard linkPreview != nil else { return }
+        linkPreviewDismissTask = Task { [weak self] in
+            try? await Task.sleep(for: LifecycleConstants.linkPreviewDismissGrace)
+            guard !Task.isCancelled else { return }
+            self?.dismissLinkPreview()
+        }
+    }
+
+    private func showLinkPreview(url: URL, anchorFrame: CGRect) {
+        linkPreview?.tearDown()
+        linkPreview = LinkPreviewState(url: url, anchorFrame: anchorFrame, cardSize: store.settings.linkPreviewSize.cardSize)
+    }
+
+    private func windowFrame(of rect: CGRect, in webView: WKWebView) -> CGRect {
+        let windowRect = webView.convert(rect, to: nil)
+        let contentHeight = window?.contentView?.bounds.height ?? 0
+        return CGRect(x: windowRect.minX, y: contentHeight - windowRect.maxY, width: windowRect.width, height: windowRect.height)
     }
 }

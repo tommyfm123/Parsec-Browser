@@ -185,6 +185,7 @@ final class AssistantModel: Identifiable {
     var selectedTabIDs: Set<UUID> = []
     var selectionText = ""
     var homeNodeID: UUID?
+    var customTitle: String?
     private(set) var isRunning = false
     @ObservationIgnored private var sessionID: String?
     @ObservationIgnored private var activeRun: AssistantRun?
@@ -201,6 +202,7 @@ final class AssistantModel: Identifiable {
     }
 
     var title: String {
+        if let customTitle, !customTitle.isEmpty { return customTitle }
         guard let firstQuestion = messages.first(where: { $0.role == .user })?.text else { return "Nuevo agente" }
         return String(firstQuestion.prefix(26))
     }

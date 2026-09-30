@@ -56,9 +56,7 @@ struct SidebarLayoutView: View {
                     .frame(width: LayoutConstants.hoverEdgeWidth)
                     .frame(maxHeight: .infinity)
                     .contentShape(Rectangle())
-                    .onHover { isInside in
-                        if isInside { model.isSidebarHovering = true }
-                    }
+                    .onHover { model.updateReveal(.sidebar, isPointerInside: $0) }
                 SidebarView(model: model, isFloating: true)
                     .padding(Self.inset)
                     .offset(x: model.isSidebarHovering ? 0 : -(model.sidebarWidth + 48))
@@ -89,9 +87,7 @@ struct AssistantEdge: View {
                     .frame(width: LayoutConstants.hoverEdgeWidth)
                     .frame(maxHeight: .infinity)
                     .contentShape(Rectangle())
-                    .onHover { isInside in
-                        if isInside { model.isAssistantHovering = true }
-                    }
+                    .onHover { model.updateReveal(.assistant, isPointerInside: $0) }
                 AssistantPanelView(model: model, assistant: model.assistant, isFloating: true)
                     .padding(SidebarView.outerInset)
                     .offset(x: model.isAssistantHovering ? 0 : AssistantPanelView.width + 48)
@@ -122,9 +118,7 @@ struct TopTabsLayoutView: View {
                     .frame(height: LayoutConstants.hoverEdgeWidth)
                     .frame(maxWidth: .infinity)
                     .contentShape(Rectangle())
-                    .onHover { isInside in
-                        if isInside { model.isSidebarHovering = true }
-                    }
+                    .onHover { model.updateReveal(.sidebar, isPointerInside: $0) }
                 TopTabsBar(model: model)
                     .shadow(color: .black.opacity(0.2), radius: 16, y: 4)
                     .offset(y: model.isSidebarHovering ? 0 : -(LayoutConstants.topBarHeight + 24))
@@ -155,15 +149,17 @@ struct TopTabsBar: View {
 
     private static let trafficLightsReservedWidth: CGFloat = 78
     private static let controlHeight: CGFloat = 32
-    private static let addressWidth: CGFloat = 250
+    private static let minimumAddressWidth: CGFloat = 250
+    private static let maximumAddressWidth: CGFloat = 520
 
     var body: some View {
         HStack(spacing: 4) {
             Spacer().frame(width: Self.trafficLightsReservedWidth)
             IconButton(symbolName: "arrow.left", label: "Atrás", isEnabled: model.activePage?.canGoBack == true) { model.goBack() }
             IconButton(symbolName: "arrow.right", label: "Adelante", isEnabled: model.activePage?.canGoForward == true) { model.goForward() }
-            AddressBar(model: model, height: Self.controlHeight)
-                .frame(width: Self.addressWidth)
+            AddressBar(model: model, height: Self.controlHeight, alwaysShowsFullURL: true)
+                .frame(minWidth: Self.minimumAddressWidth, maxWidth: Self.maximumAddressWidth)
+                .layoutPriority(1)
                 .padding(.leading, 6)
             if !model.favorites.isEmpty {
                 TopBarDivider()
@@ -319,9 +315,13 @@ struct TopTabChip: View {
     var body: some View {
         HStack(spacing: 6) {
             FaviconView(url: node.liveURL ?? node.children.first?.liveURL, size: 14)
-            Text(node.isSplit ? node.children.map(\.displayTitle).joined(separator: " | ") : node.displayTitle)
-                .font(.system(size: 12, weight: isSelected ? .medium : .regular))
-                .lineLimit(1)
+            if model.renamingNodeID == node.id {
+                InlineRenameField(initialText: node.displayTitle, font: .system(size: 12, weight: .medium)) { model.finishRenaming(node, with: $0) }
+            } else {
+                Text(node.isSplit ? node.children.map(\.displayTitle).joined(separator: " | ") : node.displayTitle)
+                    .font(.system(size: 12, weight: isSelected ? .medium : .regular))
+                    .lineLimit(1)
+            }
             Spacer(minLength: 0)
             Button { model.close(node) } label: {
                 Image(systemName: "xmark")
@@ -364,6 +364,7 @@ struct OverlayLayer: View {
                 PeekView(model: model, node: peek.node)
                     .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
+            LinkPreviewLayer(model: model)
             if let commandBar = model.commandBar {
                 CommandBarView(model: model, commandBar: commandBar)
                     .transition(.scale(scale: 0.97, anchor: .top).combined(with: .opacity))
@@ -425,6 +426,7 @@ struct OverlayLayer: View {
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.commandBar != nil)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.isHistoryPresented)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.peek?.id)
+        .animation(.easeOut(duration: 0.15), value: model.linkPreview?.isVisible)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.toast)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.permissionRequest?.id)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.passwordOffer?.id)

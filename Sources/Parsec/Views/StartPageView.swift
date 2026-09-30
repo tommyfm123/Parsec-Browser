@@ -98,8 +98,13 @@ struct StartPageView: View {
         }
         .padding(cornerRadius > 0 ? 0 : SidebarView.outerInset)
         .shadow(color: .black.opacity(0.1), radius: 10, y: 2)
-        .onAppear { isFieldFocused = true }
-        .onChange(of: model.selectedSpaceID) { isFieldFocused = true }
+        .task { focusInput() }
+        .onChange(of: model.selectedSpaceID) { focusInput() }
+    }
+
+    private func focusInput() {
+        model.window?.makeFirstResponder(nil)
+        isFieldFocused = true
     }
 
     private func submit() {

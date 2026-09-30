@@ -90,23 +90,22 @@ struct NewSpaceView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 24) {
             BrandedSheetHeader(title: "Nuevo Space", subtitle: "Un espacio con sus propias pestañas, carpetas y colores.")
             ThemePreviewView(theme: previewTheme, title: trimmedTitle.isEmpty ? "Nuevo Space" : trimmedTitle)
-                .frame(height: 120)
             TextField("Nombre del Space", text: $title)
                 .textFieldStyle(.plain)
                 .font(.system(size: 17, weight: .semibold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
                 .background(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).fill(Color.primary.opacity(0.05)))
             ThemeSection(title: "Perfil") {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 12) {
                         ForEach(store.profiles) { profile in
                             ProfileCard(
                                 name: profile.name,
-                                detail: "\(store.spaceIDs(usingProfile: profile.id).count) Spaces",
+                                detail: Self.spaceCountLabel(store.spaceIDs(usingProfile: profile.id).count),
                                 symbolName: nil,
                                 isSelected: !isCreatingProfile && selectedProfileID == profile.id
                             ) {
@@ -118,8 +117,9 @@ struct NewSpaceView: View {
                             isCreatingProfile = true
                         }
                     }
-                    .padding(2)
+                    .padding(3)
                 }
+                .scrollClipDisabled()
                 if isCreatingProfile {
                     TextField("Nombre del perfil, por ejemplo Cliente A", text: $newProfileName)
                         .textFieldStyle(.plain)
@@ -144,22 +144,29 @@ struct NewSpaceView: View {
                     }
                 }
             }
-            HStack {
+            Divider()
+            HStack(spacing: 12) {
                 Spacer()
                 Button("Cancelar") { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                    .buttonStyle(.glass)
+                    .buttonStyle(.bordered)
+                    .frame(minWidth: 96)
                 Button("Crear Space") { create() }
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.borderedProminent)
+                    .frame(minWidth: 120)
                     .disabled(!canCreate)
             }
             .controlSize(.large)
         }
-        .padding(24)
-        .frame(width: 480)
+        .padding(28)
+        .frame(width: 520)
         .animation(.easeOut(duration: 0.2), value: isCreatingProfile)
         .onAppear { selectedProfileID = model.currentSpace.profileID }
+    }
+
+    private static func spaceCountLabel(_ count: Int) -> String {
+        count == 1 ? "1 Space" : "\(count) Spaces"
     }
 
     private func create() {
