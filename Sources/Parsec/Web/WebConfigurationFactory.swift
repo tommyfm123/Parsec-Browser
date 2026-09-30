@@ -7,6 +7,7 @@ enum WebConfigurationFactory {
     private static let autofillResourceName = "autofill"
     private static let javaScriptExtension = "js"
     private static let developerExtrasKey = "developerExtrasEnabled"
+    private static let pictureInPictureKey = "allowsPictureInPictureMediaPlayback"
     private static let cacheDataTypes: Set<String> = [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache]
     private static let applicationNameForUserAgent = "Version/19.0 Safari/605.1.15"
     private static var dataStores: [UUID: WKWebsiteDataStore] = [:]
@@ -40,6 +41,7 @@ enum WebConfigurationFactory {
         configuration.preferences.isElementFullscreenEnabled = true
         configuration.preferences.isFraudulentWebsiteWarningEnabled = BrowserStore.shared.settings.warnsAboutFraudulentSites
         configuration.preferences.setValue(BrowserStore.shared.settings.developerMode, forKey: developerExtrasKey)
+        configuration.preferences.setValue(true, forKey: pictureInPictureKey)
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
         configuration.defaultWebpagePreferences.preferredContentMode = .desktop
         configuration.userContentController = makeUserContentController()

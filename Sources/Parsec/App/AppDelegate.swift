@@ -31,6 +31,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate()
     }
 
+    func applicationDidResignActive(_ notification: Notification) {
+        mainModel?.setPictureInPictureForVisibleTabs(isEntering: true)
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        mainModel?.setPictureInPictureForVisibleTabs(isEntering: false)
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard BrowserStore.shared.settings.confirmsBeforeQuit else { return .terminateNow }
         return QuitConfirmation.isConfirmed() ? .terminateNow : .terminateCancel

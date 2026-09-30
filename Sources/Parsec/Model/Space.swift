@@ -180,6 +180,7 @@ struct BrowserSettings: Codable {
     var edgeRevealDelayMilliseconds = 200
     var confirmsBeforeQuit = false
     var restoresPreviousSession = true
+    var autoPictureInPicture = true
 
     init() {}
 
@@ -233,6 +234,7 @@ struct BrowserSettings: Codable {
         edgeRevealDelayMilliseconds = try container.decodeIfPresent(Int.self, forKey: .edgeRevealDelayMilliseconds) ?? defaults.edgeRevealDelayMilliseconds
         confirmsBeforeQuit = try container.decodeIfPresent(Bool.self, forKey: .confirmsBeforeQuit) ?? defaults.confirmsBeforeQuit
         restoresPreviousSession = try container.decodeIfPresent(Bool.self, forKey: .restoresPreviousSession) ?? defaults.restoresPreviousSession
+        autoPictureInPicture = try container.decodeIfPresent(Bool.self, forKey: .autoPictureInPicture) ?? defaults.autoPictureInPicture
     }
 }
 

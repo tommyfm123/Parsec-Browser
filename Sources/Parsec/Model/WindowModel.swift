@@ -155,6 +155,7 @@ final class WindowModel: WebPageHost {
 extension WindowModel {
     func select(_ node: SidebarNode) {
         guard !node.isFolder else { return }
+        if currentSpace.selectedNodeID != node.id { handOffPictureInPicture(from: selectedNode, to: node) }
         restoreConversation(for: node)
         if currentSpace.selectedNodeID != node.id { previousSelectionID = currentSpace.selectedNodeID }
         currentSpace.selectedNodeID = node.id
@@ -166,6 +167,17 @@ extension WindowModel {
         focusedPaneID = node.isSplit ? node.children.first?.id : node.id
         isFindBarVisible = false
         store.saveSoon()
+    }
+
+    func handOffPictureInPicture(from leavingNode: SidebarNode?, to enteringNode: SidebarNode?) {
+        guard store.settings.autoPictureInPicture, leavingNode?.id != enteringNode?.id else { return }
+        leavingNode?.allTabs.forEach { AutoPictureInPicture.enter($0.page) }
+        enteringNode?.allTabs.forEach { AutoPictureInPicture.exit($0.page) }
+    }
+
+    func setPictureInPictureForVisibleTabs(isEntering: Bool) {
+        guard store.settings.autoPictureInPicture else { return }
+        selectedNode?.allTabs.forEach { isEntering ? AutoPictureInPicture.enter($0.page) : AutoPictureInPicture.exit($0.page) }
     }
 
     func focusPane(_ paneID: UUID) {
@@ -185,7 +197,9 @@ extension WindowModel {
     }
 
     func switchToSpace(_ space: Space) {
+        let leavingNode = selectedNode
         selectedSpaceID = space.id
+        handOffPictureInPicture(from: leavingNode, to: selectedNode)
         if !isPrivate { store.lastSpaceID = space.id }
         if let selectedNode { select(selectedNode) }
         store.saveSoon()

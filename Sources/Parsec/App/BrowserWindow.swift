@@ -63,6 +63,14 @@ final class BrowserWindow: NSWindow, NSWindowDelegate {
         layoutTrafficLights()
     }
 
+    func windowDidMiniaturize(_ notification: Notification) {
+        model.setPictureInPictureForVisibleTabs(isEntering: true)
+    }
+
+    func windowDidDeminiaturize(_ notification: Notification) {
+        model.setPictureInPictureForVisibleTabs(isEntering: false)
+    }
+
     func windowDidBecomeKey(_ notification: Notification) {
         layoutTrafficLights()
     }
