@@ -36,7 +36,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 }
 
 struct SettingsView: View {
-    static let size = CGSize(width: 740, height: 620)
+    static let size = CGSize(width: 880, height: 620)
+    private static let panelInset: CGFloat = 8
 
     @ViewState private var selection: SettingsSection
 
@@ -45,20 +46,13 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            SettingsTabBar(selection: $selection)
-            Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    sectionContent
-                }
-                .padding(24)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .id(selection)
+        HStack(spacing: 0) {
+            SettingsSidebar(selection: $selection)
+            SettingsPanel(section: selection) { sectionContent }
+                .padding(Self.panelInset)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(VisualEffectBackground(material: .hudWindow))
         .ignoresSafeArea()
     }
 
@@ -80,37 +74,79 @@ struct SettingsView: View {
     }
 }
 
-struct SettingsTabBar: View {
+struct SettingsSidebar: View {
+    private static let width: CGFloat = 232
+
     @Binding var selection: SettingsSection
 
     var body: some View {
-        VStack(spacing: 8) {
-            Text(selection.rawValue)
-                .font(.system(size: 13, weight: .semibold))
-                .frame(height: 28)
-            HStack(spacing: 2) {
+        VStack(alignment: .leading, spacing: 14) {
+            Label("Configuración", systemImage: "gearshape")
+                .font(.system(size: 17, weight: .medium))
+                .padding(.horizontal, 10)
+                .padding(.top, 46)
+            Divider().padding(.horizontal, 10)
+            VStack(spacing: 2) {
                 ForEach(SettingsSection.allCases) { section in
-                    Button { selection = section } label: {
-                        VStack(spacing: 3) {
-                            Image(systemName: section.symbolName)
-                                .font(.system(size: 17, weight: .regular))
-                                .frame(height: 22)
-                            Text(section.rawValue).font(.system(size: 10.5, weight: .medium))
-                        }
-                        .foregroundStyle(selection == section ? Color.accentColor : Color.secondary)
-                        .frame(width: 64, height: 50)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(selection == section ? 0.07 : 0)))
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selection == section ? .isSelected : [])
+                    SettingsSidebarRow(section: section, isSelected: selection == section) { selection = section }
                 }
             }
+            Spacer()
         }
-        .padding(.top, 4)
-        .padding(.bottom, 10)
-        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 12)
+        .frame(width: Self.width)
+        .frame(maxHeight: .infinity, alignment: .top)
         .background(WindowDragArea())
+    }
+}
+
+struct SettingsSidebarRow: View {
+    let section: SettingsSection
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
+                Image(systemName: section.symbolName)
+                    .font(.system(size: 12))
+                    .frame(width: 16)
+                Text(section.rawValue).font(.system(size: 13))
+                Spacer()
+            }
+            .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+            .padding(.horizontal, 10)
+            .frame(height: 32)
+            .background(RoundedRectangle(cornerRadius: Radius.row, style: .continuous).fill(Color.primary.opacity(isSelected ? 0.1 : 0)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+struct SettingsPanel<Content: View>: View {
+    let section: SettingsSection
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Label(section.rawValue, systemImage: section.symbolName)
+                .font(.system(size: 17, weight: .medium))
+                .padding(.horizontal, 28)
+                .padding(.top, 30)
+                .padding(.bottom, 14)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) { content }
+                    .padding(.horizontal, 28)
+                    .padding(.bottom, 28)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .id(section)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: Radius.window, style: .continuous).fill(Color.primary.opacity(0.06)))
+        .overlay(RoundedRectangle(cornerRadius: Radius.window, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
     }
 }
 
@@ -136,7 +172,7 @@ struct SettingsGroup<Content: View>: View {
                     }
                 }
             }
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(nsColor: .controlBackgroundColor)))
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.05)))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.07)))
             if let footer {
                 Text(footer).font(.system(size: 11)).foregroundStyle(.secondary).padding(.horizontal, 4).fixedSize(horizontal: false, vertical: true)

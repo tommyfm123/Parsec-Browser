@@ -176,7 +176,7 @@ struct DropdownRow: View {
         }
         .buttonStyle(.plain)
         .disabled(!entry.isEnabled)
-        .opacity(entry.isEnabled ? 1 : 0.4)
+        .opacity(entry.isEnabled ? 1 : 0.6)
         .accessibilityAddTraits(entry.isSelected ? .isSelected : [])
     }
 

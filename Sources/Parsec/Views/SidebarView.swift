@@ -341,6 +341,7 @@ struct SidebarFooter: View {
             IconButton(symbolName: DownloadManager.shared.activeCount > 0 ? "arrow.down.circle.fill" : "arrow.down.circle", label: "Descargas") {
                 isDownloadsPresented = true
             }
+            .foregroundStyle(.secondary)
             .popover(isPresented: $isDownloadsPresented, arrowEdge: .top) { DownloadsView() }
             ClaudeButton(model: model)
             GeometryReader { geometry in
@@ -363,7 +364,7 @@ struct SidebarFooter: View {
                 SpaceIconPicker(space: model.currentSpace) { model.spaceIconEditingID = nil }
             }
             Spacer(minLength: 0)
-            NewItemMenu(model: model)
+            NewItemMenu(model: model).foregroundStyle(.secondary)
         }
         .frame(height: 30)
     }
@@ -375,6 +376,7 @@ struct ClaudeButton: View {
     var body: some View {
         Button { model.isAssistantPresented.toggle() } label: {
             FaviconView(url: model.store.settings.assistantProvider.logoURL, size: 15)
+                .opacity(model.isAssistantPresented ? 1 : 0.8)
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
         }
@@ -411,6 +413,9 @@ struct NewItemMenu: View {
 }
 
 struct SpaceDot: View {
+    private static let dotSize: CGFloat = 6
+    private static let selectedDotWidth: CGFloat = 16
+
     @Bindable var model: WindowModel
     let space: Space
     let isSelected: Bool
@@ -442,13 +447,13 @@ struct SpaceDot: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color.primary.opacity(isSelected ? 0.8 : isHovering ? 0.5 : 0.32))
             } else {
-                Circle()
-                    .fill(Color.primary.opacity(isSelected ? 0.62 : isHovering ? 0.35 : 0.2))
-                    .frame(width: 7, height: 7)
+                Capsule()
+                    .fill(Color.primary.opacity(isSelected ? 0.7 : isHovering ? 0.4 : 0.22))
+                    .frame(width: isSelected ? Self.selectedDotWidth : Self.dotSize, height: Self.dotSize)
             }
         }
-        .frame(width: 26, height: 26)
+        .frame(width: 24, height: 26)
         .contentShape(Rectangle())
-        .animation(.easeOut(duration: 0.15), value: isSelected)
+        .animation(.spring(duration: 0.25, bounce: 0.2), value: isSelected)
     }
 }

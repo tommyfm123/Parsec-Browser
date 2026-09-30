@@ -144,20 +144,16 @@ struct NewSpaceView: View {
                     }
                 }
             }
-            Divider()
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 Spacer()
                 Button("Cancelar") { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                    .buttonStyle(.bordered)
-                    .frame(minWidth: 96)
+                    .buttonStyle(.sheetSecondary)
                 Button("Crear Space") { create() }
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
-                    .frame(minWidth: 120)
+                    .buttonStyle(.sheetPrimary)
                     .disabled(!canCreate)
             }
-            .controlSize(.large)
         }
         .padding(28)
         .frame(width: 520)

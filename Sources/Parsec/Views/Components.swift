@@ -259,6 +259,35 @@ extension View {
     }
 }
 
+struct SheetButtonStyle: ButtonStyle {
+    enum Kind { case primary, secondary }
+
+    private static let height: CGFloat = 34
+    private static let pressedOpacity = 0.8
+    private static let disabledOpacity = 0.35
+
+    let kind: Kind
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        let isPrimary = kind == .primary
+        configuration.label
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(isPrimary ? Color(nsColor: .windowBackgroundColor) : Color.primary.opacity(0.75))
+            .padding(.horizontal, 20)
+            .frame(height: Self.height)
+            .background(Capsule().fill(isPrimary ? Color.primary : Color.clear))
+            .hoverHighlight(cornerRadius: Self.height / 2)
+            .opacity(isEnabled ? (configuration.isPressed ? Self.pressedOpacity : 1) : Self.disabledOpacity)
+            .contentShape(Capsule())
+    }
+}
+
+extension ButtonStyle where Self == SheetButtonStyle {
+    static var sheetPrimary: SheetButtonStyle { SheetButtonStyle(kind: .primary) }
+    static var sheetSecondary: SheetButtonStyle { SheetButtonStyle(kind: .secondary) }
+}
+
 struct IconButton: View {
     let symbolName: String
     let label: String

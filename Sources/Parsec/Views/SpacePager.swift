@@ -38,7 +38,15 @@ struct SpacePager: View {
     private func trackSwipe(_ offset: CGFloat, width: CGFloat) {
         dragOffset = rubberBand(offset, width: width)
         let isPullingPastEnd = isOnLastSpace && offset < 0 && !model.isPrivate
-        model.newSpacePullProgress = isPullingPastEnd ? min(-offset / (width * LayoutConstants.newSpaceSwipeThreshold), 1) : 0
+        let previousProgress = model.newSpacePullProgress
+        model.newSpacePullProgress = isPullingPastEnd ? pullProgress(-offset, width: width) : 0
+        guard previousProgress < 1, model.newSpacePullProgress >= 1 else { return }
+        NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+    }
+
+    private func pullProgress(_ distance: CGFloat, width: CGFloat) -> CGFloat {
+        let pastDeadZone = distance - width * LayoutConstants.newSpaceSwipeDeadZone
+        return min(max(pastDeadZone / (width * LayoutConstants.newSpaceSwipeThreshold), 0), 1)
     }
 
     private func rubberBand(_ offset: CGFloat, width: CGFloat) -> CGFloat {
@@ -49,7 +57,7 @@ struct SpacePager: View {
 
     private func finishSwipe(_ offset: CGFloat, width: CGFloat) {
         let shouldCreateSpace = model.newSpacePullProgress >= 1
-        model.newSpacePullProgress = 0
+        withAnimation(Motion.spring(reduceMotion: reduceMotion)) { model.newSpacePullProgress = 0 }
         if shouldCreateSpace {
             withAnimation(Motion.spring(reduceMotion: reduceMotion)) { dragOffset = 0 }
             return model.isNewSpacePresented = true
@@ -67,6 +75,8 @@ struct NewSpaceSwipeIndicator: View {
     private static let diameter: CGFloat = 60
     private static let ringWidth: CGFloat = 4
     private static let ringInset: CGFloat = 2
+    private static let fadeInProgress: CGFloat = 0.25
+    private static let slideInDistance: CGFloat = 48
 
     let progress: CGFloat
 
@@ -95,7 +105,9 @@ struct NewSpaceSwipeIndicator: View {
                 .foregroundStyle(.secondary)
         }
         .scaleEffect(0.75 + 0.25 * progress)
-        .opacity(progress > 0 ? 1 : 0)
+        .offset(x: (1 - progress) * Self.slideInDistance)
+        .opacity(min(progress / Self.fadeInProgress, 1))
+        .animation(.easeOut(duration: 0.15), value: isReady)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
