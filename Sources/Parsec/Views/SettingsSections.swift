@@ -1154,6 +1154,9 @@ struct AdvancedSettings: View {
             SettingsToggle(symbolName: "link", tint: .gray, title: "Mostrar la URL completa", detail: "En la barra de dirección, en lugar del dominio.", isOn: SettingsBinding.make(\.showsFullURL))
         }
         SettingsGroup {
+            SettingsItem(symbolName: "cursorarrow.click.2", tint: .teal, title: "Abrir links en", detail: "Qué pasa al hacer clic con la rueda o con ⌘ sobre un link, o al abrir uno que pide una ventana nueva.") {
+                ParsecSelect(selection: SettingsBinding.make(\.linkOpening), options: LinkOpeningBehavior.allCases.map { ($0, $0.title) }, width: 150)
+            }
             SettingsToggle(symbolName: "macwindow.on.rectangle", tint: .green, title: "Links externos en ventana flotante", detail: "Si está apagado, se abren como pestaña en el Space activo.", isOn: SettingsBinding.make(\.opensExternalLinksInLittleWindow))
             SettingsItem(symbolName: "moon.zzz.fill", tint: .indigo, title: "Suspender pestañas inactivas", detail: "Cierra el proceso de la página para liberar memoria y CPU; se recarga al volver. No suspende las que reproducen audio o video.") {
                 ParsecSelect(selection: SettingsBinding.make(\.suspendAfterMinutes), options: Self.suspendOptions.map { ($0, Self.suspendLabel($0)) }, width: 120)

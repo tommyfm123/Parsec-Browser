@@ -678,6 +678,10 @@ extension WindowModel {
         return newPage.webView
     }
 
+    func openMiniWindow(from page: WebPage, url: URL?, configuration: WKWebViewConfiguration?) -> WKWebView? {
+        AppDelegate.shared.openLittleWindow(for: url, profileID: page.profileID, configuration: configuration).model.page.webView
+    }
+
     func openPeek(from page: WebPage, url: URL) {
         closePeek()
         let node = SidebarNode.tab(url: url)

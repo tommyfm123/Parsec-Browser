@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import WebKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -101,11 +102,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func openLittleWindow(for url: URL) {
         let profileID = BrowserStore.shared.space(id: BrowserStore.shared.lastSpaceID)?.profileID ?? BrowserStore.shared.profiles[0].id
-        let window = LittleWindow(model: LittleWindowModel(url: url, profileID: profileID))
+        openLittleWindow(for: url, profileID: profileID)
+    }
+
+    @discardableResult
+    func openLittleWindow(for url: URL?, profileID: UUID, configuration: WKWebViewConfiguration? = nil) -> LittleWindow {
+        let window = LittleWindow(model: LittleWindowModel(url: url, profileID: profileID, configuration: configuration))
         window.onClose = { [weak self, weak window] in self?.littleWindows.removeAll { $0 === window } }
         littleWindows.append(window)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate()
+        return window
     }
 
     func adoptIntoMainWindow(_ node: SidebarNode) {

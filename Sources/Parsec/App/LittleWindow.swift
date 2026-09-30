@@ -10,9 +10,9 @@ final class LittleWindowModel: WebPageHost {
     let page: WebPage
     @ObservationIgnored weak var window: NSWindow?
 
-    init(url: URL, profileID: UUID) {
+    init(url: URL?, profileID: UUID, configuration: WKWebViewConfiguration? = nil) {
         node = SidebarNode.tab(url: url)
-        page = BrowserStore.shared.ensurePage(for: node, profileID: profileID, isPrivate: false)
+        page = BrowserStore.shared.ensurePage(for: node, profileID: profileID, isPrivate: false, configuration: configuration)
         page.host = self
     }
 
@@ -30,6 +30,10 @@ final class LittleWindowModel: WebPageHost {
     func openNewTab(from page: WebPage, url: URL?, configuration: WKWebViewConfiguration?, inBackground: Bool) -> WKWebView? {
         AppDelegate.shared.showMainWindow()
         return AppDelegate.shared.mainModel?.openNewTab(from: page, url: url, configuration: configuration, inBackground: inBackground)
+    }
+
+    func openMiniWindow(from page: WebPage, url: URL?, configuration: WKWebViewConfiguration?) -> WKWebView? {
+        openNewTab(from: page, url: url, configuration: configuration, inBackground: false)
     }
 
     func openPeek(from page: WebPage, url: URL) {

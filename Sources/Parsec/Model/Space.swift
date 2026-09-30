@@ -131,6 +131,18 @@ final class Space: Identifiable, @MainActor Codable {
     var allNodes: [SidebarNode] { pinned + today }
 }
 
+enum LinkOpeningBehavior: String, Codable, CaseIterable {
+    case newTab
+    case miniWindow
+
+    var title: String {
+        switch self {
+        case .newTab: "Pestaña nueva"
+        case .miniWindow: "Ventana flotante"
+        }
+    }
+}
+
 enum SidebarLayout: String, Codable, CaseIterable {
     case sidebar
     case topTabs
@@ -182,6 +194,7 @@ struct BrowserSettings: Codable {
     var restoresPreviousSession = true
     var autoPictureInPicture = true
     var appIconID = AppIconConstants.defaultID
+    var linkOpening = LinkOpeningBehavior.newTab
 
     init() {}
 
@@ -237,6 +250,7 @@ struct BrowserSettings: Codable {
         restoresPreviousSession = try container.decodeIfPresent(Bool.self, forKey: .restoresPreviousSession) ?? defaults.restoresPreviousSession
         autoPictureInPicture = try container.decodeIfPresent(Bool.self, forKey: .autoPictureInPicture) ?? defaults.autoPictureInPicture
         appIconID = try container.decodeIfPresent(String.self, forKey: .appIconID) ?? defaults.appIconID
+        linkOpening = try container.decodeIfPresent(LinkOpeningBehavior.self, forKey: .linkOpening) ?? defaults.linkOpening
     }
 }
 
