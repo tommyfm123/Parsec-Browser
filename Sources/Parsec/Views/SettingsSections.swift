@@ -1064,7 +1064,15 @@ struct DocumentSettings: View {
 }
 
 struct AdvancedSettings: View {
-    private static let suspendOptions = [15, 30, 60, 0]
+    private static let suspendOptions = [1, 5, 10, 15, 60, 0]
+
+    private static func suspendLabel(_ minutes: Int) -> String {
+        switch minutes {
+        case 0: "Nunca"
+        case 1: "1 minuto"
+        default: "\(minutes) minutos"
+        }
+    }
 
     private var developerModeBinding: Binding<Bool> {
         Binding(
@@ -1084,8 +1092,8 @@ struct AdvancedSettings: View {
         }
         SettingsGroup {
             SettingsToggle(symbolName: "macwindow.on.rectangle", tint: .green, title: "Links externos en ventana flotante", detail: "Si está apagado, se abren como pestaña en el Space activo.", isOn: SettingsBinding.make(\.opensExternalLinksInLittleWindow))
-            SettingsItem(symbolName: "moon.zzz.fill", tint: .indigo, title: "Suspender pestañas inactivas", detail: "Libera memoria. No suspende las que reproducen audio o video.") {
-                ParsecSelect(selection: SettingsBinding.make(\.suspendAfterMinutes), options: Self.suspendOptions.map { ($0, $0 == 0 ? "Nunca" : "\($0) minutos") }, width: 120)
+            SettingsItem(symbolName: "moon.zzz.fill", tint: .indigo, title: "Suspender pestañas inactivas", detail: "Cierra el proceso de la página para liberar memoria y CPU; se recarga al volver. No suspende las que reproducen audio o video.") {
+                ParsecSelect(selection: SettingsBinding.make(\.suspendAfterMinutes), options: Self.suspendOptions.map { ($0, Self.suspendLabel($0)) }, width: 120)
             }
         }
         SettingsGroup(title: "Desarrollador", footer: "Se aplica a las pestañas que abras a partir de ahora.") {

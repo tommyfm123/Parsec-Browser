@@ -138,6 +138,8 @@ enum SidebarLayout: String, Codable, CaseIterable {
 
 struct BrowserSettings: Codable {
     static let defaultSidebarWidth: Double = 264
+    static let legacySuspendAfterMinutes = 30
+    static let defaultSuspendAfterMinutes = 5
     static let sidebarWidthRange: ClosedRange<Double> = 210...460
 
     var layout: SidebarLayout = .sidebar
@@ -162,7 +164,7 @@ struct BrowserSettings: Codable {
     var playsSounds = true
     var showsFullURL = false
     var opensExternalLinksInLittleWindow = true
-    var suspendAfterMinutes = 30
+    var suspendAfterMinutes = defaultSuspendAfterMinutes
     var customProviderName = "Personalizado"
     var customProviderBaseURL = "http://localhost:11434/v1"
     var developerMode = false
@@ -211,7 +213,8 @@ struct BrowserSettings: Codable {
         playsSounds = try container.decodeIfPresent(Bool.self, forKey: .playsSounds) ?? defaults.playsSounds
         showsFullURL = try container.decodeIfPresent(Bool.self, forKey: .showsFullURL) ?? defaults.showsFullURL
         opensExternalLinksInLittleWindow = try container.decodeIfPresent(Bool.self, forKey: .opensExternalLinksInLittleWindow) ?? defaults.opensExternalLinksInLittleWindow
-        suspendAfterMinutes = try container.decodeIfPresent(Int.self, forKey: .suspendAfterMinutes) ?? defaults.suspendAfterMinutes
+        let storedSuspendMinutes = try container.decodeIfPresent(Int.self, forKey: .suspendAfterMinutes)
+        suspendAfterMinutes = storedSuspendMinutes == Self.legacySuspendAfterMinutes ? defaults.suspendAfterMinutes : storedSuspendMinutes ?? defaults.suspendAfterMinutes
         customProviderName = try container.decodeIfPresent(String.self, forKey: .customProviderName) ?? defaults.customProviderName
         customProviderBaseURL = try container.decodeIfPresent(String.self, forKey: .customProviderBaseURL) ?? defaults.customProviderBaseURL
         developerMode = try container.decodeIfPresent(Bool.self, forKey: .developerMode) ?? defaults.developerMode
