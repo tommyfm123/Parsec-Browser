@@ -118,7 +118,6 @@ struct TabRow: View {
     private var isCapturing: Bool { node.allTabs.contains { $0.page?.isCapturingMedia == true } }
     private var isToday: Bool { model.isTodayNode(node) }
     private var closesTab: Bool { isToday || isLoaded }
-    private var contentOpacity: Double { closesTab || node.isSplit ? 1 : 0.55 }
     private var closeSymbol: String { closesTab && !isToday ? "minus" : "xmark" }
     private var closeLabel: String {
         if isToday { return "Cerrar" }
@@ -131,40 +130,44 @@ struct TabRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            if node.isSplit {
-                SplitRowContent(model: model, split: node, isSelected: isSelected)
-            } else {
-                FaviconView(url: node.liveURL, size: 16)
-                    .opacity(contentOpacity)
-                if model.renamingNodeID == node.id {
-                    InlineRenameField(initialText: node.displayTitle, font: .system(size: 13, weight: .medium)) { model.finishRenaming(node, with: $0) }
+        HStack(spacing: 0) {
+            HStack(spacing: 8) {
+                if node.isSplit {
+                    SplitRowContent(model: model, split: node, isSelected: isSelected)
                 } else {
-                    Text(node.displayTitle)
-                        .font(.system(size: 13, weight: isSelected ? .medium : .regular))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .opacity(contentOpacity)
+                    FaviconView(url: node.liveURL, size: 16)
+                    if model.renamingNodeID == node.id {
+                        InlineRenameField(initialText: node.displayTitle, font: .system(size: 13, weight: .medium)) { model.finishRenaming(node, with: $0) }
+                    } else {
+                        Text(node.displayTitle)
+                            .font(.system(size: 13, weight: isSelected ? .medium : .regular))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
             }
+            .padding(.leading, 10 + CGFloat(depth) * LayoutConstants.folderIndent)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture { model.select(node) }
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
             if isCapturing {
                 Circle().fill(Color.red).frame(width: 6, height: 6).accessibilityLabel("Usando cámara o micrófono")
             }
             if isHovering {
-                Image(systemName: closeSymbol)
-                    .font(.system(size: 10, weight: .bold))
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-                    .foregroundStyle(.secondary)
-                    .clickable()
-                    .highPriorityGesture(TapGesture().onEnded { performCloseAction() })
-                    .help(closeLabel)
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityLabel(closeLabel)
+                Button(action: performCloseAction) {
+                    Image(systemName: closeSymbol)
+                        .font(.system(size: 10, weight: .bold))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help(closeLabel)
+                .accessibilityLabel(closeLabel)
             }
         }
-        .padding(.leading, 10 + CGFloat(depth) * LayoutConstants.folderIndent)
         .padding(.trailing, 6)
         .frame(height: 34)
         .background(RowBackground(isSelected: isSelected, isHovering: isHovering))
@@ -172,10 +175,8 @@ struct TabRow: View {
         .contentShape(Rectangle())
         .transition(.opacity.combined(with: .scale(scale: 0.92)))
         .clickable()
-        .onTapGesture { model.select(node) }
         .onHover { isHovering = $0 }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityElement(children: .contain)
         .draggable(node.id.uuidString)
         .dropDestination(for: String.self) { items, _ in
             SidebarDrop.handle(items, model: model, onto: node)
