@@ -77,7 +77,6 @@ final class WindowModel: WebPageHost {
     @ObservationIgnored private var pendingReveals: [RevealEdge: Task<Void, Never>] = [:]
     @ObservationIgnored private var linkPreviewShowTask: Task<Void, Never>?
     @ObservationIgnored private var linkPreviewDismissTask: Task<Void, Never>?
-    @ObservationIgnored private var isLinkPreviewHovered = false
 
     init(isPrivate: Bool = false) {
         self.isPrivate = isPrivate
@@ -735,21 +734,9 @@ extension WindowModel {
         }
     }
 
-    func setLinkPreviewHovered(_ isHovered: Bool) {
-        isLinkPreviewHovered = isHovered
-        if isHovered { linkPreviewDismissTask?.cancel() } else { scheduleLinkPreviewDismissal() }
-    }
-
-    func openLinkPreviewInTab() {
-        guard let url = linkPreview?.url else { return }
-        dismissLinkPreview()
-        _ = openInNewTab(url)
-    }
-
     func dismissLinkPreview() {
         linkPreviewShowTask?.cancel()
         linkPreviewDismissTask?.cancel()
-        isLinkPreviewHovered = false
         linkPreview?.tearDown()
         linkPreview = nil
     }
@@ -773,14 +760,14 @@ extension WindowModel {
         guard linkPreview != nil else { return }
         linkPreviewDismissTask = Task { [weak self] in
             try? await Task.sleep(for: LifecycleConstants.linkPreviewDismissGrace)
-            guard !Task.isCancelled, self?.isLinkPreviewHovered == false else { return }
+            guard !Task.isCancelled else { return }
             self?.dismissLinkPreview()
         }
     }
 
     private func showLinkPreview(url: URL, anchorFrame: CGRect) {
         linkPreview?.tearDown()
-        linkPreview = LinkPreviewState(url: url, anchorFrame: anchorFrame, cardWidth: store.settings.linkPreviewSize.cardSize.width)
+        linkPreview = LinkPreviewState(url: url, anchorFrame: anchorFrame, cardSize: store.settings.linkPreviewSize.cardSize)
     }
 
     private func windowFrame(of rect: CGRect, in webView: WKWebView) -> CGRect {

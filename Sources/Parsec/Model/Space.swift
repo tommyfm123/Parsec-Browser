@@ -195,7 +195,7 @@ struct BrowserSettings: Codable {
     var autoPictureInPicture = true
     var appIconID = AppIconConstants.defaultID
     var linkOpening = LinkOpeningBehavior.newTab
-    var showsLinkPreviews = true
+    var showsLinkPreviews = false
     var linkPreviewDelayMilliseconds = 700
     var linkPreviewSize = LinkPreviewSize.medium
 

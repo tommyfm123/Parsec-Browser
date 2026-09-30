@@ -38,25 +38,119 @@ struct LinkPreviewRequest {
 }
 
 @MainActor
+final class LinkPreviewLoader: NSObject, WKNavigationDelegate {
+    private var continuation: CheckedContinuation<Bool, Never>?
+    private var hasCommitted = false
+
+    func load(_ url: URL, in webView: WKWebView, timeout: Duration) async -> Bool {
+        webView.navigationDelegate = self
+        webView.load(URLRequest(url: url))
+        let timeoutTask = Task { [weak self] in
+            try? await Task.sleep(for: timeout)
+            guard !Task.isCancelled, let self else { return }
+            finish(hasCommitted)
+        }
+        let didLoad = await withCheckedContinuation { continuation = $0 }
+        timeoutTask.cancel()
+        return didLoad
+    }
+
+    func cancel() {
+        finish(false)
+    }
+
+    private func finish(_ didLoad: Bool) {
+        continuation?.resume(returning: didLoad)
+        continuation = nil
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        hasCommitted = true
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        finish(true)
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        finish(false)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        finish(false)
+    }
+}
+
+@MainActor
 @Observable
 final class LinkPreviewState: Identifiable {
+    enum Phase {
+        case loading
+        case ready(NSImage)
+        case failed
+    }
+
+    private static let loadTimeout = Duration.seconds(8)
+    private static let renderSettleDelay = Duration.milliseconds(250)
+    private static let hideScrollbarsSource = "const style = document.createElement('style'); style.textContent = 'html{overflow:hidden!important}::-webkit-scrollbar{display:none!important}'; document.documentElement.appendChild(style);"
+
     let id = UUID()
     let url: URL
     let anchorFrame: CGRect
-    let page: WebPage
+    private(set) var phase = Phase.loading
+    private(set) var title = ""
+    @ObservationIgnored private let loader = LinkPreviewLoader()
+    @ObservationIgnored private var webView: WKWebView?
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
 
-    init(url: URL, anchorFrame: CGRect, cardWidth: CGFloat) {
+    var isVisible: Bool {
+        if case .loading = phase { return false }
+        return true
+    }
+
+    init(url: URL, anchorFrame: CGRect, cardSize: CGSize) {
         self.url = url
         self.anchorFrame = anchorFrame
+        let viewportHeight = LinkPreviewMetrics.viewportWidth * cardSize.height / cardSize.width
         let configuration = WebConfigurationFactory.makeIsolatedConfiguration()
         configuration.mediaTypesRequiringUserActionForPlayback = .all
-        page = WebPage(profileID: UUID(), isPrivate: true, configuration: configuration)
-        page.webView.pageZoom = cardWidth / LinkPreviewMetrics.viewportWidth
-        page.load(url)
+        let scrollbarScript = WKUserScript(source: Self.hideScrollbarsSource, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+        configuration.userContentController.addUserScript(scrollbarScript)
+        let previewView = WKWebView(frame: CGRect(x: 0, y: 0, width: LinkPreviewMetrics.viewportWidth, height: viewportHeight), configuration: configuration)
+        webView = previewView
+        loadTask = Task { [weak self] in await self?.capture(previewView, cardWidth: cardSize.width) }
     }
 
     func tearDown() {
-        page.tearDown()
+        loadTask?.cancel()
+        loader.cancel()
+        release()
+    }
+
+    private func capture(_ previewView: WKWebView, cardWidth: CGFloat) async {
+        let didLoad = await loader.load(url, in: previewView, timeout: Self.loadTimeout)
+        guard didLoad, !Task.isCancelled else { return failIfActive() }
+        try? await Task.sleep(for: Self.renderSettleDelay)
+        guard !Task.isCancelled else { return }
+        let configuration = WKSnapshotConfiguration()
+        configuration.snapshotWidth = NSNumber(value: cardWidth)
+        title = previewView.title ?? ""
+        let image = try? await previewView.takeSnapshot(configuration: configuration)
+        guard !Task.isCancelled else { return }
+        phase = image.map(Phase.ready) ?? .failed
+        release()
+    }
+
+    private func failIfActive() {
+        guard !Task.isCancelled else { return }
+        phase = .failed
+        release()
+    }
+
+    private func release() {
+        webView?.stopLoading()
+        webView?.navigationDelegate = nil
+        webView = nil
     }
 }
 

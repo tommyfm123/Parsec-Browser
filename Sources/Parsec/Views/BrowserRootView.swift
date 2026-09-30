@@ -413,7 +413,7 @@ struct OverlayLayer: View {
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.commandBar != nil)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.isHistoryPresented)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.peek?.id)
-        .animation(Motion.spring(reduceMotion: reduceMotion), value: model.linkPreview?.id)
+        .animation(.easeOut(duration: 0.15), value: model.linkPreview?.isVisible)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.toast)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.permissionRequest?.id)
         .animation(Motion.spring(reduceMotion: reduceMotion), value: model.passwordOffer?.id)
