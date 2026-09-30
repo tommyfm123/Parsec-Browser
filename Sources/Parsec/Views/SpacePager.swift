@@ -29,7 +29,7 @@ struct SpacePager: View {
             .animation(Motion.spring(reduceMotion: reduceMotion), value: model.currentSpaceIndex)
             .frame(width: pageWidth, alignment: .leading)
             .background(SwipeMonitor(onChange: { trackSwipe($0, width: pageWidth) }, onEnd: { finishSwipe($0, width: pageWidth) }))
-            .overlay(alignment: .trailing) {
+            .overlay(alignment: .center) {
                 NewSpaceSwipeIndicator(progress: newSpaceProgress)
             }
         }
@@ -65,26 +65,32 @@ struct SpacePager: View {
 }
 
 struct NewSpaceSwipeIndicator: View {
-    private static let diameter: CGFloat = 40
-    private static let ringWidth: CGFloat = 3
+    private static let diameter: CGFloat = 56
+    private static let ringWidth: CGFloat = 4
 
     let progress: CGFloat
 
+    private var isReady: Bool { progress >= 1 }
+
     var body: some View {
-        ZStack {
-            Circle().fill(.regularMaterial)
-            Circle().stroke(Color.primary.opacity(0.15), lineWidth: Self.ringWidth)
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: Self.ringWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            Image(systemName: "plus")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(progress >= 1 ? Color.accentColor : Color.secondary)
+        VStack(spacing: 8) {
+            ZStack {
+                Circle().fill(.regularMaterial)
+                Circle().stroke(Color.primary.opacity(0.18), lineWidth: Self.ringWidth)
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: Self.ringWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Image(systemName: "plus")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(isReady ? Color.accentColor : Color.secondary)
+            }
+            .frame(width: Self.diameter, height: Self.diameter)
+            Text(isReady ? "Suelta para crear" : "Sigue empujando")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
         }
-        .frame(width: Self.diameter, height: Self.diameter)
-        .padding(.trailing, 8)
-        .scaleEffect(0.6 + 0.4 * progress)
+        .scaleEffect(0.7 + 0.3 * progress)
         .opacity(progress > 0 ? 1 : 0)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
