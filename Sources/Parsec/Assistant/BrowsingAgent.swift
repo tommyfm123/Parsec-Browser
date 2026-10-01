@@ -93,8 +93,8 @@ enum PageDriver {
     private static let elementLimit = 140
     private static let textLimit = 7000
 
-    private static let observeScript = #"""
-        document.querySelectorAll('[data-parsec-id]').forEach((element) => element.removeAttribute('data-parsec-id'));
+    private static let observeScript = WebSecurityPolicy.sensitiveFieldScript + #"""
+        window.parsecAgentElements = new Map();
         const selectors = 'a[href], button, input:not([type=hidden]), textarea, select, summary, [role=button], [role=link], [role=tab], [role=menuitem], [role=option], [role=searchbox], [contenteditable=true]';
         const isVisible = (element) => {
           const rect = element.getBoundingClientRect();
@@ -107,10 +107,12 @@ enum PageDriver {
           if (index >= elementLimit) break;
           if (!isVisible(element)) continue;
           index += 1;
-          element.setAttribute('data-parsec-id', index);
+          window.parsecAgentElements.set(index, element);
           const tag = element.tagName.toLowerCase();
           const type = element.getAttribute('type') || '';
-          const label = (element.innerText || element.value || element.getAttribute('aria-label') || element.getAttribute('placeholder') || element.getAttribute('title') || element.getAttribute('alt') || '').replace(/\s+/g, ' ').trim().slice(0, 90);
+          const isSensitive = isSensitiveField(element);
+          const fieldValue = isSensitive ? '' : element.value;
+          const label = (element.innerText || fieldValue || element.getAttribute('aria-label') || element.getAttribute('placeholder') || element.getAttribute('title') || element.getAttribute('alt') || '').replace(/\s+/g, ' ').trim().slice(0, 90);
           const href = tag === 'a' ? (element.getAttribute('href') || '').slice(0, 110) : '';
           lines.push(`[${index}] ${tag}${type ? '[' + type + ']' : ''} "${label}"${href ? ' → ' + href : ''}`);
         }
@@ -150,8 +152,8 @@ enum PageDriver {
           setTimeout(() => ring.remove(), 600);
         };
         const locate = async (id) => {
-          const target = document.querySelector(`[data-parsec-id="${id}"]`);
-          if (!target) return null;
+          const target = window.parsecAgentElements?.get(id);
+          if (!target?.isConnected) return null;
           target.scrollIntoView({ block: 'center', inline: 'center' });
           await sleep(160);
           const rect = target.getBoundingClientRect();
@@ -163,21 +165,23 @@ enum PageDriver {
         const found = await locate(id);
         if (!found) return null;
         const target = found.target;
-        const submitsForm = target.form && ((target.tagName === 'BUTTON' && (target.getAttribute('type') || 'submit') === 'submit') || (target.tagName === 'INPUT' && ['submit', 'image'].includes(target.type)));
-        if (submitsForm && !allowsSubmit) return 'confirm';
+        const isSafeLink = () => target.tagName === 'A' && ['http:', 'https:'].includes(new URL(target.href, location.href).protocol) && !target.hasAttribute('download');
+        if (!isSafeLink() && !allowsSubmit) return 'confirm';
         await moveCursor(found.x, found.y, label);
+        if (!target.isConnected) return null;
+        if (!isSafeLink() && !allowsSubmit) return 'confirm';
         pulse(found.x, found.y);
-        found.target.click();
+        target.click();
         return [found.x, found.y];
         """#
 
-    private static let typeScript = cursorPrelude + #"""
+    private static let typeScript = cursorPrelude + WebSecurityPolicy.sensitiveFieldScript + #"""
         const found = await locate(id);
         if (!found) return null;
         const field = found.target;
-        const isSensitive = field.type === 'password' || /cc-|card|password/.test(field.getAttribute('autocomplete') || '');
-        if (isSensitive) return 'blocked';
+        if (isSensitiveField(field)) return 'blocked';
         await moveCursor(found.x, found.y, label);
+        if (!field.isConnected || isSensitiveField(field)) return 'blocked';
         pulse(found.x, found.y);
         field.focus();
         if (field.isContentEditable) {
@@ -366,7 +370,7 @@ final class BrowsingAgent {
     }
 
     private func record(_ observation: PageObservation) {
-        guard let url = observation.url, url.scheme?.hasPrefix(WebConstants.httpScheme) == true else { return }
+        guard let url = observation.url, WebSecurityPolicy.isWebURL(url) else { return }
         let host = url.host() ?? ""
         let isSearchPage = Self.searchHosts.contains { host.contains($0) }
         guard !isSearchPage, !visited.contains(where: { $0.url == url }) else { return }
@@ -440,7 +444,7 @@ final class BrowsingAgent {
             guard let url = action.query.flatMap(InputResolver.searchURL(for:)) else { return false }
             return await navigate(to: url)
         case .navigate:
-            guard let url = action.url.flatMap(URL.init(string:)), url.scheme?.hasPrefix(WebConstants.httpScheme) == true else { return false }
+            guard let url = action.url.flatMap(URL.init(string:)), WebSecurityPolicy.isWebURL(url) else { return false }
             return await navigate(to: url)
         case .click:
             guard let page, let elementID = action.id else { return false }
@@ -566,12 +570,12 @@ final class BrowsingAgent {
 @MainActor
 enum FormSubmission {
     private static let allowTitle = "Permitir"
-    private static let denyTitle = "No enviar"
+    private static let denyTitle = "Cancelar"
 
     static func confirm(host: String, detail: String) -> Bool {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "El agente quiere enviar un formulario en \(host)"
+        alert.messageText = "El agente quiere interactuar con \(host)"
         alert.informativeText = "\(detail). Permítelo solo si esperabas este paso de la tarea."
         alert.addButton(withTitle: denyTitle)
         alert.addButton(withTitle: allowTitle)

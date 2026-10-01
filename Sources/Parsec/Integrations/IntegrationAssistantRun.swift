@@ -79,7 +79,7 @@ final class IntegrationAssistantRun: AssistantRun {
             }
             onEvent(.toolStarted("\(tool.serverName) · \(tool.name)"))
             let result: String
-            if !tool.isReadOnly && !confirm(tool, arguments: call.arguments) {
+            if !confirm(tool, arguments: call.arguments) {
                 result = "El usuario rechazó esta llamada. No la repitas ni la ejecutes por otro medio."
             } else {
                 do {
@@ -100,10 +100,10 @@ final class IntegrationAssistantRun: AssistantRun {
     private func confirm(_ tool: MCPTool, arguments: JSONValue) -> Bool {
         let alert = NSAlert()
         alert.messageText = "Permitir acción en \(tool.serverName)"
-        alert.informativeText = "La herramienta \(tool.name) puede modificar datos en esta aplicación.\n\n\(String(arguments.encoded.prefix(2000)))"
-        alert.addButton(withTitle: "Permitir")
+        alert.informativeText = "La herramienta \(tool.name) puede acceder a datos o ejecutar acciones en esta aplicación. Revisá la llamada antes de permitirla.\n\n\(String(arguments.encoded.prefix(2000)))"
         alert.addButton(withTitle: "Cancelar")
-        return alert.runModal() == .alertFirstButtonReturn
+        alert.addButton(withTitle: "Permitir")
+        return alert.runModal() == .alertSecondButtonReturn
     }
 
     private func complete(_ request: AssistantRequest) async -> Completion {

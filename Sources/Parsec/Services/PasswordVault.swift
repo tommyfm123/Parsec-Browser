@@ -9,12 +9,13 @@ struct SavedCredential: Hashable, Identifiable {
 
     func matches(host pageHost: String) -> Bool {
         let normalizedHost = PasswordVault.normalized(pageHost)
-        return normalizedHost == host || normalizedHost.hasSuffix("." + host) || host.hasSuffix("." + normalizedHost)
+        return normalizedHost == PasswordVault.normalized(host)
     }
 }
 
 enum PasswordVaultError: Error {
     case authenticationFailed
+    case unsafePage
     case notFound
     case keychain(OSStatus)
 }
@@ -25,13 +26,10 @@ final class PasswordVault {
     private static let urlColumnNames: Set<String> = ["url", "website", "login_uri"]
     private static let usernameColumnNames: Set<String> = ["username", "login_username", "user"]
     private static let passwordColumnNames: Set<String> = ["password", "login_password"]
-    private static let wwwPrefix = "www."
     private static let creatorCode: OSType = 0x5052_5343
-    private static let minimumDomainLabels = 2
 
     static func normalized(_ host: String) -> String {
-        let lowercased = host.lowercased()
-        return lowercased.hasPrefix(wwwPrefix) ? String(lowercased.dropFirst(wwwPrefix.count)) : lowercased
+        host.lowercased()
     }
 
     func allCredentials() -> [SavedCredential] {
@@ -51,7 +49,7 @@ final class PasswordVault {
     }
 
     func credentials(forHost host: String) -> [SavedCredential] {
-        Self.candidateHosts(for: host).flatMap(credentials(exactHost:))
+        credentials(exactHost: Self.normalized(host))
     }
 
     private func credentials(exactHost host: String) -> [SavedCredential] {
@@ -64,13 +62,6 @@ final class PasswordVault {
         return items.compactMap { item in
             (item[kSecAttrAccount as String] as? String).map { SavedCredential(host: host, account: $0) }
         }
-    }
-
-    private static func candidateHosts(for host: String) -> [String] {
-        let labels = normalized(host).split(separator: ".").map(String.init)
-        guard labels.count >= minimumDomainLabels else { return [normalized(host)] }
-        let domains = (0...(labels.count - minimumDomainLabels)).map { labels[$0...].joined(separator: ".") }
-        return domains + domains.map { wwwPrefix + $0 }
     }
 
     func hasPassword(host: String, account: String, password: String) -> Bool {
@@ -142,6 +133,7 @@ final class PasswordVault {
             kSecClass as String: kSecClassInternetPassword,
             kSecAttrServer as String: host,
             kSecAttrProtocol as String: kSecAttrProtocolHTTPS,
+            kSecAttrCreator as String: Self.creatorCode,
         ]
     }
 }

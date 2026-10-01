@@ -305,7 +305,7 @@ private struct PageContextToggle: View {
     var body: some View {
         Button(action: onToggle) {
             HStack(spacing: 6) {
-                FaviconView(url: page.currentURL, size: 13, isDimmed: !isOn)
+                FaviconView(url: page.currentURL, size: 13, isDimmed: !isOn, allowsNetwork: !page.isEphemeral)
                 Text(pageTitle)
                     .font(.system(size: 11.5, weight: .medium))
                     .lineLimit(1)

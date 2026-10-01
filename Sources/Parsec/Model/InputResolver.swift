@@ -13,8 +13,9 @@ enum InputResolver {
     }
 
     static func searchURL(for query: String) -> URL? {
-        let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
-        return URL(string: WebConstants.googleSearchURL + encodedQuery)
+        var components = URLComponents(string: WebConstants.googleSearchURL)
+        components?.queryItems = [URLQueryItem(name: "q", value: query)]
+        return components?.url
     }
 
     static func isLocalHost(_ host: String) -> Bool {

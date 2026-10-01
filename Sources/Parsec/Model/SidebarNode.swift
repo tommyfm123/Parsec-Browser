@@ -84,6 +84,8 @@ final class SidebarNode: Identifiable, @MainActor Codable {
         return host.replacingOccurrences(of: WebConstants.wwwPrefix, with: "")
     }
 
+    var allowsFaviconNetwork: Bool { !allTabs.contains { $0.page?.isEphemeral == true } }
+
     var liveURL: URL? { page?.currentURL ?? url }
 
     var allTabs: [SidebarNode] {

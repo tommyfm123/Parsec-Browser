@@ -35,14 +35,27 @@ enum APIKeyStore {
 
 enum ServerSentEvents {
     private static let dataPrefix = "data: "
+    private static let maximumErrorCharacters = 4096
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpShouldSetCookies = false
+        configuration.httpCookieStorage = nil
+        configuration.timeoutIntervalForRequest = 60
+        configuration.timeoutIntervalForResource = 300
+        return URLSession(configuration: configuration, delegate: MCPRedirectPolicy(), delegateQueue: nil)
+    }()
     static let doneMarker = "[DONE]"
 
     static func lines(for request: URLRequest) async throws -> AsyncLineSequence<URLSession.AsyncBytes> {
-        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        guard let url = request.url, WebSecurityPolicy.isSecureEndpoint(url) else { throw APIError.invalidEndpoint }
+        let (bytes, response) = try await session.bytes(for: request)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            var body = ""
-            for try await line in bytes.lines { body += line }
-            throw APIError.http(status: (response as? HTTPURLResponse)?.statusCode ?? 0, body: body)
+            var data = Data()
+            for try await byte in bytes {
+                guard data.count < maximumErrorCharacters else { break }
+                data.append(byte)
+            }
+            throw APIError.http(status: (response as? HTTPURLResponse)?.statusCode ?? 0, body: String(decoding: data, as: UTF8.self))
         }
         return bytes.lines
     }
@@ -166,7 +179,8 @@ enum OpenAIAPIClient {
     private static let completionsPath = "chat/completions"
 
     static func endpoint(forBaseURL baseURL: String) -> URL? {
-        URL(string: baseURL.trimmingCharacters(in: .whitespaces))?.appending(path: completionsPath)
+        guard let url = URL(string: baseURL.trimmingCharacters(in: .whitespaces)), WebSecurityPolicy.isSecureEndpoint(url) else { return nil }
+        return url.appending(path: completionsPath)
     }
 
     static func stream(_ request: AssistantRequest, endpoint: URL?, provider: AssistantProviderKind, onEvent: @escaping @MainActor (AssistantEvent) -> Void) async {

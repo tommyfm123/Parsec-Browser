@@ -27,7 +27,8 @@ final class ContentBlocker {
     private(set) var ruleLists: [WKContentRuleList] = []
     private(set) var cookieRuleList: WKContentRuleList?
     private(set) var googleOneTapRuleList: WKContentRuleList?
-    private var observers: [([WKContentRuleList]) -> Void] = []
+    private let controllers = NSMapTable<WKUserContentController, NSNumber>.weakToStrongObjects()
+    private var preparationTask: Task<Void, Never>?
     private let defaults = UserDefaults.standard
     private let filtersFolderURL: URL = {
         let url = StorageConstants.applicationSupportURL.appending(path: filtersFolderName, directoryHint: .isDirectory)
@@ -40,16 +41,34 @@ final class ContentBlocker {
     }
 
     func prepare() {
-        Task {
-            let store = WKContentRuleListStore.default()
-            cookieRuleList = try? await store?.compileContentRuleList(forIdentifier: Self.thirdPartyCookieListIdentifier, encodedContentRuleList: Self.thirdPartyCookieRules)
-            googleOneTapRuleList = try? await store?.compileContentRuleList(forIdentifier: Self.googleOneTapListIdentifier, encodedContentRuleList: Self.googleOneTapRules)
+        guard preparationTask == nil else { return }
+        preparationTask = Task {
+            cookieRuleList = await cachedRuleList(identifier: Self.thirdPartyCookieListIdentifier, rules: Self.thirdPartyCookieRules)
+            googleOneTapRuleList = await cachedRuleList(identifier: Self.googleOneTapListIdentifier, rules: Self.googleOneTapRules)
             await compileAll(version: currentVersion)
-            await refreshIfStale()
+            updateControllers()
+            Task { await refreshIfStale() }
         }
     }
 
+    func waitUntilPrepared() async -> Bool {
+        prepare()
+        await preparationTask?.value
+        return cookieRuleList != nil && ruleLists.count == Self.filterSources.count
+    }
+
+    private func cachedRuleList(identifier: String, rules: String) async -> WKContentRuleList? {
+        guard let store = WKContentRuleListStore.default() else { return nil }
+        if let cached = try? await store.contentRuleList(forIdentifier: identifier) { return cached }
+        return try? await store.compileContentRuleList(forIdentifier: identifier, encodedContentRuleList: rules)
+    }
+
     func install(on controller: WKUserContentController, includesBlocker: Bool) {
+        controllers.setObject(NSNumber(value: includesBlocker), forKey: controller)
+        applyRules(on: controller, includesBlocker: includesBlocker)
+    }
+
+    private func applyRules(on controller: WKUserContentController, includesBlocker: Bool) {
         controller.removeAllContentRuleLists()
         cookieRuleList.map(controller.add)
         if BrowserStore.shared.settings.hidesGoogleOneTap { googleOneTapRuleList.map(controller.add) }
@@ -57,9 +76,12 @@ final class ContentBlocker {
         ruleLists.forEach(controller.add)
     }
 
-    func observe(_ handler: @escaping ([WKContentRuleList]) -> Void) {
-        observers.append(handler)
-        if !ruleLists.isEmpty { handler(ruleLists) }
+    private func updateControllers() {
+        let registeredControllers = controllers.keyEnumerator()
+        while let controller = registeredControllers.nextObject() as? WKUserContentController {
+            let includesBlocker = controllers.object(forKey: controller)?.boolValue ?? true
+            applyRules(on: controller, includesBlocker: includesBlocker)
+        }
     }
 
     private func compileAll(version: String) async {
@@ -69,9 +91,9 @@ final class ContentBlocker {
                 compiledLists.append(ruleList)
             }
         }
-        guard !compiledLists.isEmpty else { return }
+        guard compiledLists.count == Self.filterSources.count else { return }
         ruleLists = compiledLists
-        observers.forEach { $0(compiledLists) }
+        updateControllers()
     }
 
     private func refreshIfStale() async {
@@ -94,16 +116,20 @@ final class ContentBlocker {
         if let cached = try? await store.contentRuleList(forIdentifier: identifier) {
             return cached
         }
-        guard let contents = filterContents(listName: listName) else { return nil }
-        let encodedRules = await Task.detached { Self.webKitRules(fromFilterList: contents) }.value
-        return try? await store.compileContentRuleList(forIdentifier: identifier, encodedContentRuleList: encodedRules)
+        for contents in filterContents(listName: listName) {
+            let encodedRules = await Task.detached { Self.webKitRules(fromFilterList: contents) }.value
+            guard encodedRules != "[]" else { continue }
+            if let compiled = try? await store.compileContentRuleList(forIdentifier: identifier, encodedContentRuleList: encodedRules) { return compiled }
+        }
+        return nil
     }
 
-    private func filterContents(listName: String) -> String? {
+    private func filterContents(listName: String) -> [String] {
         let downloadedURL = downloadedFileURL(for: listName)
         let bundledURL = Bundle.main.url(forResource: listName, withExtension: StorageConstants.filterListExtension)
-        let sourceURL = FileManager.default.fileExists(atPath: downloadedURL.path) ? downloadedURL : bundledURL
-        return sourceURL.flatMap { try? String(contentsOf: $0, encoding: .utf8) }
+        return [downloadedURL, bundledURL].compactMap { sourceURL in
+            sourceURL.flatMap { try? String(contentsOf: $0, encoding: .utf8) }
+        }
     }
 
     private func downloadedFileURL(for listName: String) -> URL {

@@ -97,9 +97,9 @@ enum BrowserActionExecutor {
         element.click();
         return true;
         """
-    private static let fillScript = """
+    private static let fillScript = WebSecurityPolicy.sensitiveFieldScript + """
         const field = document.querySelector(selector);
-        if (!field) return false;
+        if (!field || isSensitiveField(field)) return false;
         const prototype = field instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
         Object.getOwnPropertyDescriptor(prototype, 'value').set.call(field, value);
         field.dispatchEvent(new Event('input', { bubbles: true }));
@@ -178,7 +178,8 @@ enum BrowserActionExecutor {
     }
 
     private static func destination(_ text: String?) -> URL? {
-        text.flatMap(InputResolver.destination(for:))
+        guard let url = text.flatMap(InputResolver.destination(for:)), WebSecurityPolicy.isWebURL(url) else { return nil }
+        return url
     }
 
     private static func searchURL(_ text: String?) -> URL? {

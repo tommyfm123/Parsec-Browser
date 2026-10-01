@@ -41,7 +41,7 @@ Parsec es un navegador para macOS inspirado en Arc, construido desde cero con **
 **Privacidad y seguridad**
 - Bloqueo de anuncios y rastreadores (EasyList + EasyPrivacy), cookies de terceros bloqueadas y solo HTTPS.
 - Aviso de sitios fraudulentos, confirmación antes de descargas de riesgo y cuarentena de Gatekeeper para lo que descargas.
-- Permisos de cámara y micrófono por sitio. Las notificaciones web están desactivadas.
+- Permisos de cámara y micrófono por origen (protocolo, dominio y puerto). Las notificaciones web están desactivadas.
 - Contraseñas en el Llavero de macOS, que se rellenan solo cuando lo pides y con Touch ID. Las API keys también se guardan en el Llavero.
 - Por defecto, el agente navega en un perfil temporal sin tus sesiones y te pide permiso antes de enviar cualquier formulario.
 - Modo desarrollador opcional, con inspector web y menú Desarrollador.
@@ -83,6 +83,7 @@ Para usarlo como navegador predeterminado: **Configuración → General → Nave
 swift build                    # compilación de desarrollo
 ./scripts/build-app.sh debug   # app de desarrollo en build/Parsec.app
 ./scripts/run-checks.sh        # verificaciones rápidas
+./scripts/run-audit-checks.sh  # verificación aislada con WebKit real y servidor local
 ```
 
 ## Conectar la IA
@@ -91,7 +92,7 @@ Abre **Configuración → IA** y elige un proveedor:
 
 | Proveedor | Qué necesitas |
 | --- | --- |
-| Claude Code | Tener `claude` instalado y la sesión iniciada |
+| Claude Code | Tener una versión de `claude` que soporte `--restricted`, con la sesión iniciada |
 | Codex (ChatGPT) | Tener `codex` instalado y la sesión iniciada |
 | API de Anthropic / OpenAI | Pegar tu API key, que se guarda en el Llavero |
 | Modelos locales | Instalar y abrir Ollama; los modelos se descargan desde Parsec |
@@ -101,7 +102,7 @@ Abre **Configuración → IA** y elige un proveedor:
 
 En **Configuración → Plugins & MCPs** podés agregar servidores MCP remotos por URL (Streamable HTTP) o locales por comando (stdio). También podés importar el formato JSON `mcpServers`, con `url`, `headers`, `command`, `args` y `env` según el transporte. Usá **Conectar** para verificar el servidor y **Ver herramientas** para revisar lo que ofrece.
 
-Los MCPs activados están disponibles en el chat y en el agente de navegación con cualquier proveedor de IA. Parsec pide confirmación para las herramientas que no se declaran de solo lectura. Los tokens, headers y variables de entorno se guardan en el Llavero; la configuración de servidores queda en `integrations.json`.
+Los MCPs activados están disponibles en el chat y en el agente de navegación con cualquier proveedor de IA. Parsec pide confirmación para cada llamada MCP; una declaración de solo lectura del servidor no reemplaza esa autorización. Los tokens, headers y variables de entorno se guardan en el Llavero; la configuración de servidores queda en `integrations.json`.
 
 La pestaña **Skills** permite importar instrucciones Markdown o carpetas con archivos `SKILL.md`, activarlas y revisar su contenido. Se importan instrucciones; esta versión no instala dependencias ni ejecuta scripts de plugins. La conexión remota admite tokens y headers; el inicio de sesión OAuth automático y el transporte SSE antiguo todavía no están disponibles.
 

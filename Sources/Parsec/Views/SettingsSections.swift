@@ -1354,7 +1354,7 @@ struct AdvancedSettings: View {
             SettingsItem(symbolName: "rectangle.expand.vertical", tint: .cyan, title: "Tamaño de la vista previa") {
                 ParsecSelect(selection: SettingsBinding.make(\.linkPreviewSize), options: LinkPreviewSize.allCases.map { ($0, $0.title) }, width: 120)
             }
-            SettingsToggle(symbolName: "pip.enter", tint: .pink, title: "Imagen en imagen automática", detail: "Al salir de una pestaña que reproduce video, el video pasa a una ventana flotante.", isOn: SettingsBinding.make(\.autoPictureInPicture))
+            SettingsToggle(symbolName: "pip.enter", tint: .pink, title: "Imagen en imagen automática", detail: "Al salir de una pestaña, el video que pusiste a reproducir pasa a una ventana flotante. Los videos que arrancan solos no.", isOn: SettingsBinding.make(\.autoPictureInPicture))
             SettingsToggle(symbolName: "link", tint: .gray, title: "Mostrar la URL completa", detail: "En la barra de dirección, en lugar del dominio.", isOn: SettingsBinding.make(\.showsFullURL))
         }
         SettingsGroup {

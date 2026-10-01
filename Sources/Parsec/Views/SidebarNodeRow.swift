@@ -143,7 +143,7 @@ struct TabRow: View {
                 if node.isSplit {
                     SplitRowContent(model: model, split: node, isSelected: isSelected)
                 } else {
-                    FaviconView(url: node.liveURL, size: 16)
+                    FaviconView(url: node.liveURL, size: 16, allowsNetwork: node.allowsFaviconNetwork)
                     if model.renamingNodeID == node.id {
                         InlineRenameField(initialText: node.displayTitle, font: .system(size: 13, weight: .medium)) { model.finishRenaming(node, with: $0) }
                     } else {
@@ -209,7 +209,7 @@ struct SplitRowContent: View {
                         .padding(.horizontal, 6)
                 }
                 HStack(spacing: 6) {
-                    FaviconView(url: pane.liveURL, size: 15)
+                    FaviconView(url: pane.liveURL, size: 15, allowsNetwork: pane.allowsFaviconNetwork)
                     Text(pane.displayTitle.isEmpty ? "Nuevo panel" : pane.displayTitle)
                         .font(.system(size: 13, weight: isSelected && pane.id == model.focusedPaneID ? .medium : .regular))
                         .lineLimit(1)

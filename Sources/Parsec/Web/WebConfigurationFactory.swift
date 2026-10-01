@@ -14,7 +14,7 @@ enum WebConfigurationFactory {
     private static let cacheDataTypes: Set<String> = [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache]
     private static let applicationNameForUserAgent = "Version/19.0 Safari/605.1.15"
     private static var dataStores: [UUID: WKWebsiteDataStore] = [:]
-    private static let privateDataStore = WKWebsiteDataStore.nonPersistent()
+    private static var privateDataStores: [UUID: WKWebsiteDataStore] = [:]
     private static let autofillScriptSource: String = {
         guard let url = Bundle.main.url(forResource: autofillResourceName, withExtension: javaScriptExtension) else { return "" }
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
@@ -26,7 +26,12 @@ enum WebConfigurationFactory {
     }()
 
     static func dataStore(profileID: UUID, isPrivate: Bool) -> WKWebsiteDataStore {
-        if isPrivate { return privateDataStore }
+        if isPrivate {
+            if let existing = privateDataStores[profileID] { return existing }
+            let store = WKWebsiteDataStore.nonPersistent()
+            privateDataStores[profileID] = store
+            return store
+        }
         if let existing = dataStores[profileID] { return existing }
         let store = WKWebsiteDataStore(forIdentifier: profileID)
         dataStores[profileID] = store
@@ -56,6 +61,10 @@ enum WebConfigurationFactory {
         return configuration
     }
 
+    static func releasePrivateData(profileID: UUID) {
+        privateDataStores[profileID] = nil
+    }
+
     static func deleteData(profileID: UUID) async {
         let store = dataStore(profileID: profileID, isPrivate: false)
         await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
@@ -82,6 +91,7 @@ enum WebConfigurationFactory {
         let linkPreviewScript = WKUserScript(source: linkPreviewScriptSource, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: linkPreviewWorld)
         controller.addUserScript(linkPreviewScript)
         controller.add(LinkPreviewMessageRouter.shared, contentWorld: linkPreviewWorld, name: linkPreviewHandlerName)
+        controller.addUserScript(AutoPictureInPicture.intentTrackingScript)
         ContentBlocker.shared.install(on: controller, includesBlocker: true)
         return controller
     }
@@ -93,6 +103,7 @@ final class AutofillMessageRouter: NSObject, WKScriptMessageHandler {
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.frameInfo.isMainFrame, let webView = message.webView, let page = WebPage.page(for: webView) else { return }
-        page.handleAutofillMessage(message.body, originHost: message.frameInfo.securityOrigin.host)
+        guard let origin = WebOrigin(securityOrigin: message.frameInfo.securityOrigin) else { return }
+        page.handleAutofillMessage(message.body, origin: origin)
     }
 }
