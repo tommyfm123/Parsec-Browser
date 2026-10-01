@@ -124,12 +124,11 @@ struct CommandBarView: View {
                                 .padding(.top, index == 0 ? 4 : 10)
                                 .padding(.bottom, 4)
                         }
-                        CommandResultRow(result: result, isSelected: index == commandBar.selectedIndex)
-                            .id(result.id)
-                            .onTapGesture { commandBar.activate(result) }
-                            .onHover { isInside in
-                                if isInside { commandBar.selectedIndex = index }
+                        Button { commandBar.activate(result) } label: {
+                            CommandResultRow(result: result, isSelected: index == commandBar.selectedIndex)
                             }
+                            .buttonStyle(.plain)
+                            .id(result.id)
                     }
                 }
                 .padding(8)
@@ -237,7 +236,7 @@ struct CommandResultRow: View {
         .contentShape(Rectangle())
         .clickable()
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
