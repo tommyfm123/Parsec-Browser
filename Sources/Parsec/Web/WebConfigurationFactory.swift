@@ -91,6 +91,7 @@ enum WebConfigurationFactory {
         let linkPreviewScript = WKUserScript(source: linkPreviewScriptSource, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: linkPreviewWorld)
         controller.addUserScript(linkPreviewScript)
         controller.add(LinkPreviewMessageRouter.shared, contentWorld: linkPreviewWorld, name: linkPreviewHandlerName)
+        controller.addUserScript(AutoPictureInPicture.intentTrackingScript)
         ContentBlocker.shared.install(on: controller, includesBlocker: true)
         return controller
     }
