@@ -149,6 +149,11 @@ final class CommandBarModel {
         switch result.kind {
         case .openTab(let nodeID):
             guard let node = windowModel.store.node(nodeID) ?? windowModel.currentSpace.today.find(nodeID) else { return }
+            if case .favorites = windowModel.store.container(of: nodeID) {
+                guard let url = node.liveURL else { return }
+                windowModel.open(url, mode: .newTab)
+                return
+            }
             windowModel.reveal(node)
         case .url(let url):
             windowModel.open(url, mode: mode)
