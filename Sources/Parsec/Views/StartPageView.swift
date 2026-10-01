@@ -77,10 +77,8 @@ struct StartPageView: View {
                     }
                     .frame(maxWidth: 850)
                     .frame(maxWidth: .infinity)
-                    .frame(minHeight: geometry.size.height, alignment: .top)
+                    .frame(minHeight: geometry.size.height, alignment: .center)
                     .padding(.horizontal, 32)
-                    .padding(.top, 56)
-                    .padding(.bottom, 36)
                 }
                 .scrollIndicators(.never)
             }
