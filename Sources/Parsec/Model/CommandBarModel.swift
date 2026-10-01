@@ -180,9 +180,9 @@ final class CommandBarModel {
         let tabURLs = Set(tabResults.compactMap(\.iconURL))
         let historyResults = windowModel.isPrivate ? [] : historyResults(matching: trimmedQuery, in: windowModel, excluding: tabURLs)
         let documentResults = Self.docsKeywords.contains(trimmedQuery.lowercased()) ? [documentResult()] : []
-        let leadingResults = documentResults + destinationResults + assistantResults
+        let leadingResults = documentResults + tabResults + destinationResults + assistantResults
         let conversations = windowModel.isPrivate ? [] : conversationResults(matching: trimmedQuery, in: windowModel)
-        results = leadingResults + tabResults + conversations + historyResults + actionResults(matching: trimmedQuery)
+        results = leadingResults + conversations + historyResults + actionResults(matching: trimmedQuery)
         scheduleSuggestions(for: trimmedQuery, isEnabled: windowModel.store.settings.showsSearchSuggestions && !windowModel.isPrivate)
     }
 
