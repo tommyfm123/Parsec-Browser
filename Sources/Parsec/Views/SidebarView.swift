@@ -296,13 +296,11 @@ struct FavoritesGrid: View {
             }
         }
         .background(RoundedRectangle(cornerRadius: Radius.control + 1, style: .continuous).strokeBorder(Color.accentColor.opacity(isDropTargeted ? 0.6 : 0), lineWidth: 1.5))
-        .dragContainer(for: String.self, itemID: \.self) { (ids: [String]) in ids }
         .dragConfiguration(DragConfiguration(operationsWithinApp: .init(allowCopy: true, allowMove: true), operationsOutsideApp: .init(allowCopy: false)))
         .onDragSessionUpdated { session in
             switch session.phase {
             case .initial, .active:
-                guard draggedFavoriteID == nil, let payload = session.draggedItemIDs(for: String.self).first else { return }
-                draggedFavoriteID = UUID(uuidString: payload)
+                break
             case .ended(let operation):
                 if operation == .cancel || operation == .forbidden { finishDrag() }
             case .dataTransferCompleted:
@@ -319,7 +317,7 @@ struct FavoritesGrid: View {
     private func page(_ nodes: [SidebarNode], index: Int) -> some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.spacing), count: columnCount), spacing: Self.spacing) {
             ForEach(nodes) { node in
-                FavoriteTile(model: model, node: node, isDragging: draggedFavoriteID == node.id)
+                FavoriteTile(model: model, node: node, isDragging: draggedFavoriteID == node.id) { draggedFavoriteID = node.id }
             }
         }
         .frame(maxWidth: .infinity)
@@ -361,9 +359,7 @@ struct FavoritesGrid: View {
     }
 
     private func previewDrop(_ session: DropSession, page: Int) {
-        guard let payload = session.localSession?.draggedItemIDs(for: String.self).first,
-              let sourceID = UUID(uuidString: payload), model.favorites.contains(where: { $0.id == sourceID }) else { return }
-        draggedFavoriteID = sourceID
+        guard let sourceID = draggedFavoriteID, model.favorites.contains(where: { $0.id == sourceID }) else { return }
         let innerWidth = model.sidebarWidth - SidebarView.horizontalPadding * 2
         let slot = SidebarViewMetrics.favoriteSlot(at: session.location, availableWidth: innerWidth, columnCount: columnCount)
         let targetIndex = page * columnCount * Self.maximumRows + slot
@@ -412,6 +408,7 @@ struct FavoriteTile: View {
     @Bindable var model: WindowModel
     let node: SidebarNode
     var isDragging = false
+    let beginDrag: () -> Void
     @ViewState private var isHovering = false
     @Environment(\.colorScheme) private var colorScheme
 
@@ -437,7 +434,10 @@ struct FavoriteTile: View {
             .help(node.displayTitle)
             .accessibilityLabel(node.displayTitle)
             .accessibilityAddTraits(.isButton)
-            .draggable(String.self, id: \.self, item: node.id.uuidString)
+            .onDrag {
+                beginDrag()
+                return NSItemProvider(object: node.id.uuidString as NSString)
+            }
             .opacity(isDragging ? 0.35 : 1)
             .contextMenu { NodeContextMenu(model: model, node: node) }
     }
