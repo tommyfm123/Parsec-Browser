@@ -85,6 +85,34 @@ enum SidebarViewMetrics {
     static let folderRowHeight: CGFloat = 38
     static let folderIconSize: CGFloat = 19
     static let folderTitleSize: CGFloat = 14
+    static let favoriteSpacing: CGFloat = 6
+    static let favoriteTileHeight: CGFloat = 44
+    static let preferredFavoriteTileWidth: CGFloat = 60
+    static let minimumFavoriteColumns = 3
+
+    static func favoriteColumnCount(availableWidth: CGFloat, favoriteCount: Int) -> Int {
+        let fittedColumns = Int((max(availableWidth, 0) + favoriteSpacing) / (preferredFavoriteTileWidth + favoriteSpacing))
+        return min(max(favoriteCount, 1), max(minimumFavoriteColumns, fittedColumns))
+    }
+
+    static func favoriteDropIndex(sourceIndex: Int, targetIndex: Int) -> Int {
+        sourceIndex < targetIndex ? targetIndex + 1 : targetIndex
+    }
+
+    static func favoriteSlot(at location: CGPoint, availableWidth: CGFloat, columnCount: Int) -> Int {
+        let columnWidth = (availableWidth + favoriteSpacing) / CGFloat(columnCount)
+        let column = min(max(Int(location.x / columnWidth), 0), columnCount - 1)
+        let row = max(Int(location.y / (favoriteTileHeight + favoriteSpacing)), 0)
+        return row * columnCount + column
+    }
+
+    static func favoriteOrder(_ ids: [UUID], moving sourceID: UUID, to targetIndex: Int) -> [UUID] {
+        guard let sourceIndex = ids.firstIndex(of: sourceID) else { return ids }
+        var reordered = ids
+        reordered.remove(at: sourceIndex)
+        reordered.insert(sourceID, at: min(max(targetIndex, 0), reordered.count))
+        return reordered
+    }
 }
 
 enum AssistantPanelMetrics {

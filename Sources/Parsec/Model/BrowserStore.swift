@@ -221,6 +221,17 @@ extension BrowserStore {
     }
 
     func move(_ nodeID: UUID, into container: NodeContainer, at index: Int? = nil) {
+        if self.container(of: nodeID) == container {
+            withAnimation(Self.rowAnimation) {
+                modifyChildren(of: container) { children in
+                    guard let sourceIndex = children.firstIndex(where: { $0.id == nodeID }) else { return }
+                    let node = children.remove(at: sourceIndex)
+                    children.insert(node, at: min(max(index ?? children.count, 0), children.count))
+                }
+            }
+            saveSoon()
+            return
+        }
         guard !isDescendant(container, of: nodeID), let node = detach(nodeID) else { return }
         insert(node, into: container, at: index)
     }

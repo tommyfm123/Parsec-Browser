@@ -40,9 +40,15 @@ struct RowBackground: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        RoundedRectangle(cornerRadius: LayoutConstants.rowCornerRadius, style: .continuous)
+        RoundedRectangle(cornerRadius: SidebarPalette.rowCornerRadius, style: .continuous)
             .fill(SidebarPalette.rowFill(colorScheme, isSelected: isSelected, isHovering: isHovering))
-            .shadow(color: .black.opacity(isSelected ? 0.09 : 0), radius: 3, y: 1)
+            .overlay {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: SidebarPalette.rowCornerRadius, style: .continuous)
+                        .fill(SidebarPalette.glassFill(colorScheme, isActive: false))
+                        .overlay(RoundedRectangle(cornerRadius: SidebarPalette.rowCornerRadius, style: .continuous).strokeBorder(Color.primary.opacity(0.16), lineWidth: 0.75))
+                }
+            }
     }
 }
 
@@ -143,7 +149,15 @@ struct TabRow: View {
                 if node.isSplit {
                     SplitRowContent(model: model, split: node, isSelected: isSelected)
                 } else {
-                    FaviconView(url: node.liveURL, size: 16, allowsNetwork: node.allowsFaviconNetwork)
+                    if node.liveURL == nil {
+                        Image(systemName: "safari")
+                            .font(.system(size: 16, weight: .regular))
+                            .symbolRenderingMode(.hierarchical)
+                            .frame(width: 16, height: 16)
+                            .accessibilityHidden(true)
+                    } else {
+                        FaviconView(url: node.liveURL, size: 16, allowsNetwork: node.allowsFaviconNetwork)
+                    }
                     if model.renamingNodeID == node.id {
                         InlineRenameField(initialText: node.displayTitle, font: .system(size: 13, weight: .medium)) { model.finishRenaming(node, with: $0) }
                     } else {
@@ -164,11 +178,11 @@ struct TabRow: View {
             if isCapturing {
                 Circle().fill(Color.red).frame(width: 6, height: 6).accessibilityLabel("Usando cámara o micrófono")
             }
-            if isHovering {
+            if isHovering || isSelected {
                 Button(action: performCloseAction) {
                     Image(systemName: closeSymbol)
-                        .font(.system(size: 10, weight: .bold))
-                        .frame(width: 24, height: 24)
+                        .font(.system(size: 13, weight: .regular))
+                        .frame(width: 28, height: SidebarPalette.rowHeight)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -178,7 +192,8 @@ struct TabRow: View {
             }
         }
         .padding(.trailing, 6)
-        .frame(height: 34)
+        .frame(height: SidebarPalette.rowHeight)
+        .foregroundStyle(Color.primary.opacity(isSelected ? 1 : 0.75))
         .background(RowBackground(isSelected: isSelected, isHovering: isHovering))
         .dropIndicator(isDropTargeted, leadingInset: CGFloat(depth) * LayoutConstants.folderIndent)
         .contentShape(Rectangle())
@@ -245,7 +260,7 @@ struct FolderRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            FolderIconView(symbolName: node.iconSymbol, size: SidebarViewMetrics.folderIconSize, weight: .semibold)
+            FolderIconView(symbolName: node.iconSymbol, size: SidebarViewMetrics.folderIconSize, weight: .semibold, isFilled: true)
             if model.renamingNodeID == node.id {
                 InlineRenameField(initialText: node.title, font: .system(size: SidebarViewMetrics.folderTitleSize, weight: .semibold)) { model.finishRenaming(node, with: $0) }
             } else {
@@ -253,6 +268,10 @@ struct FolderRow: View {
                     .font(.system(size: SidebarViewMetrics.folderTitleSize, weight: .semibold))
                     .lineLimit(1)
             }
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .regular))
+                .rotationEffect(.degrees(node.isExpanded ? 90 : 0))
+                .foregroundStyle(.secondary)
             Spacer(minLength: 0)
             if isHovering {
                 ParsecDropdown(arrowEdge: .trailing) {
@@ -268,11 +287,6 @@ struct FolderRow: View {
                 .help("Opciones de la carpeta")
                 .accessibilityLabel("Opciones de la carpeta")
             }
-            Image(systemName: "chevron.right")
-                .font(.system(size: 9, weight: .bold))
-                .rotationEffect(.degrees(node.isExpanded ? 90 : 0))
-                .foregroundStyle(.secondary)
-                .opacity(isHovering || !node.isExpanded ? 1 : 0)
         }
         .padding(.leading, 10 + CGFloat(depth) * LayoutConstants.folderIndent)
         .padding(.trailing, 8)
@@ -422,6 +436,11 @@ enum SidebarDrop {
         let store = BrowserStore.shared
         guard let container = store.container(of: target.id) ?? todayContainer(of: target, model: model) else { return false }
         let targetIndex = store.index(of: target.id, in: container) ?? model.currentSpace.today.firstIndex { $0.id == target.id }
+        if case .favorites = container, let targetIndex, let payload = items.first,
+           let sourceID = UUID(uuidString: payload), let sourceIndex = store.index(of: sourceID, in: container) {
+            let insertionIndex = SidebarViewMetrics.favoriteDropIndex(sourceIndex: sourceIndex, targetIndex: targetIndex)
+            return handle(items, model: model, container: container, index: insertionIndex)
+        }
         return handle(items, model: model, container: container, index: targetIndex)
     }
 

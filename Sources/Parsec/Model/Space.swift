@@ -31,6 +31,11 @@ enum SpaceAppearance: String, Codable, CaseIterable {
 struct SpaceTheme: Codable, Hashable {
     static let maxColors = 3
     static let standard = SpaceTheme(colors: [ThemeColor(red: 0.8, green: 0.8, blue: 0.82)], grain: 0.6, transparency: 0.25)
+    static let prism = SpaceTheme(colors: [
+        ThemeColor(red: 0.18, green: 0.12, blue: 0.49),
+        ThemeColor(red: 0.01, green: 0.29, blue: 0.25),
+        ThemeColor(red: 0.06, green: 0.16, blue: 0.49),
+    ], grain: 0, transparency: 0)
 
     var colors: [ThemeColor]
     var grain: Double
