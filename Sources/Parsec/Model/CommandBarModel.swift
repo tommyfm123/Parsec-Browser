@@ -119,7 +119,10 @@ final class CommandBarModel {
 
     let mode: CommandBarMode
     var query: String {
-        didSet { refreshResults() }
+        didSet {
+            guard query != oldValue else { return }
+            refreshResults()
+        }
     }
     private(set) var results: [CommandResult] = []
     var selectedIndex = 0
