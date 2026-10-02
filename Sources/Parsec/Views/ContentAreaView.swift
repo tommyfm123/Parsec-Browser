@@ -5,6 +5,11 @@ struct ContentAreaView: View {
     let cornerRadius: CGFloat
     @ViewState private var isSplitDropTargeted = false
 
+    private var showsStartPage: Bool {
+        guard let node = model.selectedNode else { return true }
+        return node.isTab && node.liveURL == nil && model.pageConversations[node.id] == nil
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             Group {
@@ -20,7 +25,7 @@ struct ContentAreaView: View {
             }
             .id(model.selectedNode?.id)
             if isSplitDropTargeted {
-                SplitDropHint()
+                SplitDropHint(opensPage: showsStartPage)
             }
             if model.isFindBarVisible {
                 FindBarView(model: model)
@@ -32,6 +37,12 @@ struct ContentAreaView: View {
         .dropDestination(for: String.self) { items, _ in
             guard let payload = items.first else { return false }
             if let nodeID = UUID(uuidString: payload) {
+                if showsStartPage, !model.isPrivate, let node = model.favorites.first(where: { $0.id == nodeID }), node.isTab {
+                    model.store.move(nodeID, into: .today(spaceID: model.currentSpace.id))
+                    model.select(node)
+                    return true
+                }
+                guard model.selectedNode != nil, nodeID != model.selectedNode?.id else { return false }
                 model.addToSplit(nodeID)
                 return true
             }
@@ -301,6 +312,8 @@ struct BlankPaneView: View {
 }
 
 struct SplitDropHint: View {
+    var opensPage = false
+
     var body: some View {
         RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
             .fill(Color.accentColor.opacity(0.1))
@@ -308,7 +321,7 @@ struct SplitDropHint: View {
                 RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
                     .strokeBorder(Color.accentColor.opacity(0.55), style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
             )
-            .overlay(Label("Soltar para dividir", systemImage: "rectangle.split.2x1").font(.system(size: 14, weight: .semibold)))
+            .overlay(Label(opensPage ? "Soltar para abrir la página" : "Soltar para dividir", systemImage: opensPage ? "arrow.up.right.square" : "rectangle.split.2x1").font(.system(size: 14, weight: .semibold)))
             .padding(10)
             .allowsHitTesting(false)
     }

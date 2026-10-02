@@ -488,6 +488,6 @@ struct WindowBackgroundView: View {
     let theme: SpaceTheme
 
     var body: some View {
-        SpaceBackgroundView(theme: theme)
+        SpaceBackgroundView(theme: theme, usesMesh: true)
     }
 }

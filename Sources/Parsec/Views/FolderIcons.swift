@@ -5,19 +5,15 @@ struct FolderIconView: View {
     let symbolName: String?
     var size: CGFloat = 16
     var weight = Font.Weight.medium
+    var isFilled = false
 
     var body: some View {
-        ZStack {
-            Image(systemName: "folder")
-                .font(.system(size: size, weight: weight))
-            if let symbolName {
-                Image(systemName: symbolName)
-                    .font(.system(size: size * 0.42, weight: .bold))
-                    .offset(y: size * 0.1)
-            }
-        }
-        .frame(width: size + 4, height: size + 2)
-        .accessibilityHidden(true)
+        Image(systemName: symbolName ?? (isFilled ? "folder.fill" : "folder"))
+            .font(.system(size: size, weight: weight))
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(isFilled ? Color.blue : Color.primary)
+            .frame(width: size + 4, height: size + 2)
+            .accessibilityHidden(true)
     }
 }
 

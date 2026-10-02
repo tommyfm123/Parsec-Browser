@@ -196,69 +196,50 @@ struct SpaceContentView: View {
     @Bindable var space: Space
     @ViewState private var isPinnedDropTargeted = false
     @ViewState private var isTodayDropTargeted = false
+    @ViewState private var rowsHeight: CGFloat = 0
 
     var body: some View {
-        ScrollView(.vertical) {
-            LazyVStack(alignment: .leading, spacing: 1) {
-                SpaceTitleRow(model: model, space: space)
-                ForEach(space.pinned) { node in
-                    SidebarNodeRow(model: model, node: node, depth: 0)
-                }
-                if space.pinned.isEmpty && !model.isPrivate {
-                    Text("Arrastra pestañas aquí para fijarlas")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 30)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.primary.opacity(isPinnedDropTargeted ? 0.35 : 0.12), style: StrokeStyle(lineWidth: 1, dash: [4])))
-                        .dropDestination(for: String.self) { items, _ in
-                            SidebarDrop.handle(items, model: model, container: .pinned(spaceID: space.id), index: nil)
-                        } isTargeted: { isPinnedDropTargeted = $0 }
-                }
-                TodayDivider(model: model, space: space)
-                    .dropDestination(for: String.self) { items, _ in
-                        SidebarDrop.handle(items, model: model, container: .today(spaceID: space.id), index: 0)
-                    } isTargeted: { isTodayDropTargeted = $0 }
-                NewTabRow(model: model)
-                ForEach(space.today) { node in
-                    SidebarNodeRow(model: model, node: node, depth: 0)
-                }
-                Color.clear
-                    .frame(maxWidth: .infinity, minHeight: 80)
-                    .contentShape(Rectangle())
-                    .dropDestination(for: String.self) { items, _ in
-                        SidebarDrop.handle(items, model: model, container: .today(spaceID: space.id), index: nil)
+        GeometryReader { geometry in
+            ScrollView(.vertical) {
+                VStack(spacing: 4) {
+                    LazyVStack(alignment: .leading, spacing: 4) {
+                        Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 1).padding(.vertical, 4)
+                        ForEach(space.pinned) { node in
+                            SidebarNodeRow(model: model, node: node, depth: 0)
+                        }
+                        if space.pinned.isEmpty && !model.isPrivate {
+                            Color.clear
+                                .frame(maxWidth: .infinity, minHeight: 8)
+                                .contentShape(Rectangle())
+                                .background(Color.primary.opacity(isPinnedDropTargeted ? 0.08 : 0))
+                                .dropDestination(for: String.self) { items, _ in
+                                    SidebarDrop.handle(items, model: model, container: .pinned(spaceID: space.id), index: nil)
+                                } isTargeted: { isPinnedDropTargeted = $0 }
+                        }
+                        TodayDivider(model: model, space: space)
+                            .dropDestination(for: String.self) { items, _ in
+                                SidebarDrop.handle(items, model: model, container: .today(spaceID: space.id), index: 0)
+                            } isTargeted: { isTodayDropTargeted = $0 }
+                        NewTabRow(model: model)
+                            .dropDestination(for: String.self) { items, _ in
+                                SidebarDrop.handle(items, model: model, container: .today(spaceID: space.id), index: 0)
+                            } isTargeted: { isTodayDropTargeted = $0 }
+                        ForEach(space.today) { node in
+                            SidebarNodeRow(model: model, node: node, depth: 0)
+                        }
                     }
+                    .onGeometryChange(for: CGFloat.self) { proxy in proxy.size.height } action: { rowsHeight = $0 }
+                    Color.clear
+                        .frame(maxWidth: .infinity)
+                        .frame(height: max(80, geometry.size.height - rowsHeight - 4))
+                        .contentShape(Rectangle())
+                        .dropDestination(for: String.self) { items, _ in
+                            SidebarDrop.handle(items, model: model, container: .today(spaceID: space.id), index: nil)
+                        }
+                }
             }
-        }
-        .scrollIndicators(.never)
-        .scrollEdgeEffectStyle(.soft, for: .vertical)
-    }
-}
-
-struct SpaceTitleRow: View {
-    @Bindable var model: WindowModel
-    @Bindable var space: Space
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Text(space.title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-            if let profile = BrowserStore.shared.profile(for: space), profile.name != space.title, !model.isPrivate {
-                Text(profile.name)
-                    .font(.system(size: 10, weight: .medium))
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(Color.primary.opacity(0.08)))
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 8)
-        .frame(height: 26)
-        .contentShape(Rectangle())
-        .contextMenu {
-            if !model.isPrivate { NativeMenuItems(entries: SpaceMenu.entries(model: model, space: space)) }
+            .scrollIndicators(.never)
+            .scrollEdgeEffectStyle(.soft, for: .vertical)
         }
     }
 }
@@ -281,7 +262,7 @@ struct TodayDivider: View {
             }
         }
         .padding(.horizontal, 8)
-        .frame(height: 22)
+        .frame(height: 14)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
     }
@@ -298,13 +279,13 @@ struct NewTabRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "plus").font(.system(size: 12, weight: .semibold)).frame(width: 16)
+            Image(systemName: "plus").font(.system(size: 19, weight: .light)).frame(width: 16)
             Text("Nueva pestaña").font(.system(size: 13))
             Spacer()
         }
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 8)
-        .frame(height: 32)
+        .padding(.horizontal, 10)
+        .frame(height: SidebarPalette.rowHeight)
         .background(RoundedRectangle(cornerRadius: LayoutConstants.rowCornerRadius, style: .continuous).fill(Color.primary.opacity(isHovering ? 0.08 : 0)))
         .contentShape(Rectangle())
         .clickable()

@@ -204,6 +204,24 @@ struct ParsecAudit {
         try expect(try await evaluate(fillScript, in: credentialPage, world: WebConfigurationFactory.autofillWorld, arguments: matchingArguments) as? Bool == false, "autofill rejects cross-origin form destination")
         credentialPage.tearDown()
         let model = WindowModel()
+        let commandQuery = "audit command selection"
+        let commandTab = SidebarNode.tab(url: baseURL, title: commandQuery)
+        model.currentSpace.today.append(commandTab)
+        store.settings.showsSearchSuggestions = false
+        let commandBar = CommandBarModel(windowModel: model, mode: .newTab, initialText: commandQuery)
+        try expect(commandBar.results.first?.kind == .openTab(nodeID: commandTab.id), "command bar starts with the matching tab")
+        commandBar.moveSelection(by: 1)
+        let searchResult = commandBar.results[commandBar.selectedIndex]
+        commandBar.query = commandQuery
+        try expect(commandBar.selectedIndex == 1 && commandBar.results[1].id == searchResult.id && searchResult.kind == .url(InputResolver.searchURL(for: commandQuery)!), "unchanged query preserves the selected Google search")
+        commandBar.moveSelection(by: 1)
+        commandBar.query = commandQuery
+        try expect(commandBar.results[commandBar.selectedIndex].kind == .askAssistant(commandQuery), "unchanged query preserves another selected result")
+        commandBar.moveSelection(by: -1)
+        try expect(commandBar.results[commandBar.selectedIndex].id == searchResult.id, "up arrow restores the previous result")
+        commandBar.query = "changed audit command selection"
+        try expect(commandBar.selectedIndex == 0 && commandBar.results.first?.id != searchResult.id, "changed query rebuilds results and resets selection")
+        store.remove(commandTab.id)
         let otherProfile = Profile(name: "Second audit profile")
         store.profiles.append(otherProfile)
         let otherSpace = Space(title: "Second audit space", profileID: otherProfile.id)

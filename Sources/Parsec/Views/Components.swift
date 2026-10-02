@@ -124,6 +124,7 @@ struct SpaceBackgroundView: View {
     private static let glassGradientOpacity = 0.55
     let theme: SpaceTheme
     var isGlass = false
+    var usesMesh = false
 
     private var gradientColors: [Color] {
         let colors = theme.colors.map(\.color)
@@ -133,7 +134,21 @@ struct SpaceBackgroundView: View {
     var body: some View {
         ZStack {
             if !isGlass { VisualEffectBackground() }
-            LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing)
+            Group {
+                if usesMesh, theme.colors.count == SpaceTheme.maxColors {
+                    MeshGradient(width: 3, height: 3, points: [
+                        [0, 0], [0.5, 0], [1, 0],
+                        [0, 0.5], [0.5, 0.5], [1, 0.5],
+                        [0, 1], [0.5, 1], [1, 1],
+                    ], colors: [
+                        gradientColors[0], gradientColors[0], gradientColors[1],
+                        gradientColors[0], gradientColors[1], gradientColors[2],
+                        gradientColors[1], gradientColors[1], gradientColors[2],
+                    ])
+                } else {
+                    LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                }
+            }
                 .opacity((1 - theme.transparency) * (isGlass ? Self.glassGradientOpacity : 1))
             Image(nsImage: GrainTexture.image)
                 .resizable(resizingMode: .tile)

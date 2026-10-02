@@ -68,6 +68,16 @@ struct ArcThemeEditor: View {
             }
             .frame(height: 250)
             HStack(spacing: 8) {
+                Button(action: applyPrism) {
+                    Circle()
+                        .fill(LinearGradient(colors: SpaceTheme.prism.colors.map(\.color), startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .overlay(Circle().strokeBorder(Color.primary.opacity(0.2)))
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
+                .clickable()
+                .help("Prisma")
+                .accessibilityLabel("Tema Prisma")
                 ForEach(Self.paletteHues, id: \.self) { point in
                     Button { applyPalette(point) } label: {
                         Circle()
@@ -101,6 +111,10 @@ struct ArcThemeEditor: View {
         let currentPoints = points
         space.theme.appearance = appearance
         ThemeColorSpace.recolor(&space.theme, points: currentPoints)
+    }
+
+    private func applyPrism() {
+        space.theme = .prism
     }
 
     private func setVibrancy(_ vibrancy: Double) {
