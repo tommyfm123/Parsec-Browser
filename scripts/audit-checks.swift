@@ -128,6 +128,21 @@ struct ParsecAudit {
         let auditHost = AuditHost()
         privatePage.host = auditHost
         let controller = privatePage.webView.configuration.userContentController
+        guard let docsMetricsScript = controller.userScripts.first(where: { $0.source == WebConfigurationFactory.googleDocsWindowMetricsScript }) else {
+            throw NSError(domain: "ParsecAudit", code: 1, userInfo: [NSLocalizedDescriptionKey: "Google Docs window metrics script missing"])
+        }
+        try expect(docsMetricsScript.injectionTime == .atDocumentStart && docsMetricsScript.isForMainFrameOnly, "Docs metrics run before its canvas renderer starts")
+        let metricsFixture = """
+        const location = { hostname: host };
+        const window = { outerWidth: width, outerHeight: height, innerWidth: 816, innerHeight: 1056 };
+        \(docsMetricsScript.source)
+        window.innerWidth = 1024;
+        window.innerHeight = 768;
+        return [window.outerWidth, window.outerHeight];
+        """
+        try expect(try await evaluate(metricsFixture, in: privatePage, arguments: ["host": "docs.google.com", "width": 0, "height": 0]) as? [Int] == [1024, 768], "Docs missing window metrics follow viewport resizing")
+        try expect(try await evaluate(metricsFixture, in: privatePage, arguments: ["host": "docs.google.com", "width": 1280, "height": 900]) as? [Int] == [1280, 900], "Docs valid native window metrics remain intact")
+        try expect(try await evaluate(metricsFixture, in: privatePage, arguments: ["host": "other.example", "width": 0, "height": 0]) as? [Int] == [0, 0], "Docs window metric workaround leaves other sites unchanged")
         controller.add(frameCapture, contentWorld: .defaultClient, name: "auditFrame")
         controller.addUserScript(WKUserScript(source: "window.webkit.messageHandlers.auditFrame.postMessage(window === top ? 'main' : 'child');", injectionTime: .atDocumentEnd, forMainFrameOnly: false, in: .defaultClient))
         _ = try await evaluate("window.webkit.messageHandlers.auditFrame.postMessage('main'); const frame = document.createElement('iframe'); frame.src = '/embedded'; document.body.appendChild(frame); return true;", in: privatePage)
