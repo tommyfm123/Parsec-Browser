@@ -28,8 +28,11 @@ final class PasswordVault {
     private static let passwordColumnNames: Set<String> = ["password", "login_password"]
     private static let creatorCode: OSType = 0x5052_5343
 
+    private static let wwwPrefix = "www."
+
     static func normalized(_ host: String) -> String {
-        host.lowercased()
+        let lowercased = host.lowercased()
+        return lowercased.hasPrefix(wwwPrefix) ? String(lowercased.dropFirst(wwwPrefix.count)) : lowercased
     }
 
     func allCredentials() -> [SavedCredential] {
@@ -49,7 +52,8 @@ final class PasswordVault {
     }
 
     func credentials(forHost host: String) -> [SavedCredential] {
-        credentials(exactHost: Self.normalized(host))
+        let bareHost = Self.normalized(host)
+        return credentials(exactHost: bareHost) + credentials(exactHost: Self.wwwPrefix + bareHost)
     }
 
     private func credentials(exactHost host: String) -> [SavedCredential] {
@@ -65,7 +69,7 @@ final class PasswordVault {
     }
 
     func hasPassword(host: String, account: String, password: String) -> Bool {
-        (try? readPassword(for: SavedCredential(host: Self.normalized(host), account: account))) == password
+        credentials(forHost: host).contains { $0.account == account && (try? readPassword(for: $0)) == password }
     }
 
     func authenticatedPassword(for credential: SavedCredential) async throws -> String {
