@@ -54,6 +54,7 @@ enum DebugBridge {
         case "lifecycle": BrowserStore.shared.runLifecycleTick()
         case "miniPopup": MiniPopupController.shared.show()
         case "renderRoutineEditor": render(RoutineEditorSheet(routine: RoutineTemplate.all[0].makeRoutine(profileID: model.profileID), spaces: model.spaces, isNew: true) { _ in }.background(Color(nsColor: .windowBackgroundColor)), named: "routine-render")
+        case "renderQuit": render(QuitConfirmationView(onCancel: {}, onConfirm: {}).padding(24).background(Color(white: 0.86)), named: "quit-render")
         default: break
         }
     }
