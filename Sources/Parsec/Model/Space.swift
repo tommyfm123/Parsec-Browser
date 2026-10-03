@@ -165,6 +165,7 @@ struct BrowserSettings: Codable {
     var showsSearchSuggestions = true
     var blockerDisabledHosts: Set<String> = []
     var passwordNeverHosts: Set<String> = []
+    var autofillsPasswords = true
     var hasImportedFromArc = false
     var sitePermissions: [String: Bool] = [:]
     var assistantIncludesPage = true
@@ -226,6 +227,7 @@ struct BrowserSettings: Codable {
         showsSearchSuggestions = try container.decodeIfPresent(Bool.self, forKey: .showsSearchSuggestions) ?? defaults.showsSearchSuggestions
         blockerDisabledHosts = try container.decodeIfPresent(Set<String>.self, forKey: .blockerDisabledHosts) ?? defaults.blockerDisabledHosts
         passwordNeverHosts = try container.decodeIfPresent(Set<String>.self, forKey: .passwordNeverHosts) ?? defaults.passwordNeverHosts
+        autofillsPasswords = try container.decodeIfPresent(Bool.self, forKey: .autofillsPasswords) ?? defaults.autofillsPasswords
         hasImportedFromArc = try container.decodeIfPresent(Bool.self, forKey: .hasImportedFromArc) ?? defaults.hasImportedFromArc
         sitePermissions = try container.decodeIfPresent([String: Bool].self, forKey: .sitePermissions) ?? defaults.sitePermissions
         assistantIncludesPage = try container.decodeIfPresent(Bool.self, forKey: .assistantIncludesPage) ?? defaults.assistantIncludesPage
