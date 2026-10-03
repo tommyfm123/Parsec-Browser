@@ -3,7 +3,9 @@
   const USERNAME_SELECTOR = "input[type=email], input[type=text], input[autocomplete=username], input:not([type])";
   const PASSWORD_SELECTOR = "input[type=password]";
   const SUBMIT_SELECTOR = "button[type=submit], input[type=submit], button:not([type])";
+  const USERNAME_HINT = /user|e-?mail|login|identifier|account/i;
   let hasReportedForm = false;
+  let hasReportedUsernameField = false;
   const documentID = crypto.randomUUID();
   window.parsecCredentialDocumentID = documentID;
   const hasSafeDestination = (field) => {
@@ -32,11 +34,26 @@
     field.dispatchEvent(new Event("change", { bubbles: true }));
   };
 
+  const isLoginUsernameField = (field) =>
+    field instanceof HTMLInputElement &&
+    field.matches(USERNAME_SELECTOR) &&
+    field.offsetParent !== null &&
+    (field.type === "email" || USERNAME_HINT.test(`${field.autocomplete} ${field.name} ${field.id}`));
+
   const reportFormIfPresent = () => {
-    if (hasReportedForm || visiblePasswordFields().length === 0) return;
-    hasReportedForm = true;
-    formObserver.disconnect();
-    post({ type: "formDetected" });
+    const hasPasswordField = visiblePasswordFields().length > 0;
+    if (!hasPasswordField) hasReportedForm = false;
+    if (hasPasswordField && !hasReportedForm) {
+      hasReportedForm = true;
+      post({ type: "formDetected" });
+    }
+    reportUsernameFocus();
+  };
+
+  const reportUsernameFocus = () => {
+    if (hasReportedUsernameField || visiblePasswordFields().length > 0 || !isLoginUsernameField(document.activeElement)) return;
+    hasReportedUsernameField = true;
+    post({ type: "usernameFocused" });
   };
 
   const reportSubmission = () => {
@@ -49,11 +66,21 @@
   window.parsecFillCredentials = (username, password, expectedDocumentID, expectedOrigin) => {
     if (documentID !== expectedDocumentID || location.origin !== expectedOrigin) return false;
     const passwordField = visiblePasswordFields()[0];
-    if (!passwordField || !hasSafeDestination(passwordField)) return false;
+    if (!passwordField) return fillUsernameOnly(username);
+    if (!hasSafeDestination(passwordField)) return "none";
     const usernameField = usernameFieldFor(passwordField);
     if (usernameField && username) setFieldValue(usernameField, username);
     setFieldValue(passwordField, password);
-    return true;
+    return "full";
+  };
+
+  const fillUsernameOnly = (username) => {
+    const field = isLoginUsernameField(document.activeElement)
+      ? document.activeElement
+      : Array.from(document.querySelectorAll(USERNAME_SELECTOR)).find(isLoginUsernameField);
+    if (!field || !username || !hasSafeDestination(field)) return "none";
+    setFieldValue(field, username);
+    return "username";
   };
 
   document.addEventListener("submit", reportSubmission, true);
@@ -64,6 +91,10 @@
     },
     true
   );
+  document.addEventListener("focusin", () => {
+    hasReportedUsernameField = false;
+    reportUsernameFocus();
+  }, true);
   const formObserver = new MutationObserver(reportFormIfPresent);
   formObserver.observe(document.documentElement, { childList: true, subtree: true });
   reportFormIfPresent();

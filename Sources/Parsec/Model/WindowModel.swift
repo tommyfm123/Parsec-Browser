@@ -759,6 +759,11 @@ extension WindowModel {
         fillPassword()
     }
 
+    func suggestCredentialChoices(for page: WebPage) {
+        guard page === activePage, passwordOffer == nil, credentialChoices.isEmpty else { return }
+        credentialChoices = PasswordVault.shared.credentials(forHost: page.currentHost)
+    }
+
     func acceptFillSuggestion() {
         fillSuggestionHost = nil
         fillPassword()
