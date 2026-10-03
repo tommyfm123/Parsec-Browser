@@ -33,6 +33,7 @@ protocol WebPageHost: AnyObject {
     func requestPermission(host: String, kind: PermissionKind, page: WebPage) async -> Bool
     func offerPasswordSave(host: String, username: String, password: String)
     func suggestPasswordFill(for page: WebPage)
+    func suggestCredentialChoices(for page: WebPage)
     func presentingWindow() -> NSWindow?
     func linkPreviewDidChange(_ event: LinkPreviewEvent, from page: WebPage)
 }
@@ -43,6 +44,7 @@ extension WebPageHost {
 
 extension WebPageHost {
     func suggestPasswordFill(for page: WebPage) {}
+    func suggestCredentialChoices(for page: WebPage) {}
 }
 
 @MainActor
@@ -50,7 +52,20 @@ extension WebPageHost {
 final class WebPage: NSObject {
     private enum AutofillMessageType: String {
         case formDetected
+        case usernameFocused
         case submitted
+    }
+
+    private enum FillResult: String {
+        case full
+        case username
+        case none
+    }
+
+    private struct PendingFill {
+        let credential: SavedCredential
+        let password: String
+        let expiresAt: Date
     }
 
     private static let registry = NSMapTable<WKWebView, WebPage>.weakToWeakObjects()
@@ -60,6 +75,7 @@ final class WebPage: NSObject {
     private static let faviconScript = "return document.querySelector(\"link[rel~='icon']\")?.href ?? null;"
     private static let credentialDocumentScript = "return window.parsecCredentialDocumentID || '';"
     private static let fillScript = "return window.parsecFillCredentials(username, password, expectedDocumentID, expectedOrigin);"
+    private static let pendingFillLifetime: TimeInterval = 120
     private static let cancelledErrorCodes: Set<Int> = [NSURLErrorCancelled, 102]
     private static let middleMouseButtonNumbers: Set<Int> = [2, 4]
 
@@ -76,6 +92,7 @@ final class WebPage: NSObject {
     var isUsingCamera = false
     var isUsingMicrophone = false
     var hasSavedCredentials = false
+    private var pendingFill: PendingFill?
     var hasCommittedNavigation = false
     var agentActivity: String?
 
@@ -137,21 +154,39 @@ final class WebPage: NSObject {
     }
 
     func fill(_ credential: SavedCredential) async throws {
+        let (origin, documentID, expectedNavigationID) = try await credentialContext(for: credential)
+        let password = try await PasswordVault.shared.authenticatedPassword(for: credential)
+        guard !isTornDown, !webView.isLoading, navigationID == expectedNavigationID,
+              webView.url.flatMap(WebOrigin.init(url:)) == origin else { throw PasswordVaultError.unsafePage }
+        let result = try await runFillScript(credential: credential, password: password, origin: origin, documentID: documentID)
+        guard result != .none else { throw PasswordVaultError.unsafePage }
+        pendingFill = result == .username ? PendingFill(credential: credential, password: password, expiresAt: Date().addingTimeInterval(Self.pendingFillLifetime)) : nil
+    }
+
+    private func fillPending(_ pending: PendingFill) async throws {
+        pendingFill = nil
+        let (origin, documentID, _) = try await credentialContext(for: pending.credential)
+        let result = try await runFillScript(credential: pending.credential, password: pending.password, origin: origin, documentID: documentID)
+        guard result == .full else { throw PasswordVaultError.unsafePage }
+    }
+
+    private func credentialContext(for credential: SavedCredential) async throws -> (WebOrigin, String, UUID) {
         guard !isTornDown, !webView.isLoading, let url = webView.url, let origin = WebOrigin(url: url),
               origin.allowsCredentials, credential.matches(host: origin.host) else { throw PasswordVaultError.unsafePage }
         let expectedNavigationID = navigationID
         let documentID = try await webView.callAsyncJavaScript(Self.credentialDocumentScript, arguments: [:], in: nil, contentWorld: WebConfigurationFactory.autofillWorld) as? String
         guard let documentID, !documentID.isEmpty, navigationID == expectedNavigationID else { throw PasswordVaultError.unsafePage }
-        let password = try await PasswordVault.shared.authenticatedPassword(for: credential)
-        guard !isTornDown, !webView.isLoading, navigationID == expectedNavigationID,
-              webView.url.flatMap(WebOrigin.init(url:)) == origin else { throw PasswordVaultError.unsafePage }
-        let didFill = try await webView.callAsyncJavaScript(
+        return (origin, documentID, expectedNavigationID)
+    }
+
+    private func runFillScript(credential: SavedCredential, password: String, origin: WebOrigin, documentID: String) async throws -> FillResult {
+        let rawResult = try await webView.callAsyncJavaScript(
             Self.fillScript,
             arguments: [Self.usernameKey: credential.account, Self.passwordKey: password, "expectedDocumentID": documentID, "expectedOrigin": origin.javascriptOrigin],
             in: nil,
             contentWorld: WebConfigurationFactory.autofillWorld
-        ) as? Bool
-        guard let didFill, didFill else { throw PasswordVaultError.unsafePage }
+        ) as? String
+        return rawResult.flatMap(FillResult.init(rawValue:)) ?? .none
     }
 
     func handleAutofillMessage(_ body: Any, origin: WebOrigin) {
@@ -163,8 +198,22 @@ final class WebPage: NSObject {
         let originHost = origin.host
         switch messageType {
         case .formDetected:
+            if let pending = pendingFill, pending.expiresAt > Date(), pending.credential.matches(host: originHost) {
+                Task {
+                    do {
+                        try await fillPending(pending)
+                    } catch {
+                        host?.suggestPasswordFill(for: self)
+                    }
+                }
+                return
+            }
+            pendingFill = nil
             hasSavedCredentials = !PasswordVault.shared.credentials(forHost: originHost).isEmpty
             if hasSavedCredentials { host?.suggestPasswordFill(for: self) }
+        case .usernameFocused:
+            hasSavedCredentials = !PasswordVault.shared.credentials(forHost: originHost).isEmpty
+            if hasSavedCredentials { host?.suggestCredentialChoices(for: self) }
         case .submitted:
             let username = payload[Self.usernameKey] as? String ?? ""
             let password = payload[Self.passwordKey] as? String ?? ""
