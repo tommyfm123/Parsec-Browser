@@ -279,7 +279,7 @@ struct NewTabRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "plus").font(.system(size: 19, weight: .light)).frame(width: 16)
+            Image(systemName: "plus").font(.system(size: 13, weight: .medium)).frame(width: 16)
             Text("Nueva pestaña").font(.system(size: 13))
             Spacer()
         }

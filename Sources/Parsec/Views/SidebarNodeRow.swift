@@ -32,6 +32,16 @@ struct SidebarNodeRow: View {
 
 enum SidebarDropMetrics {
     static let indicatorOverhang: CGFloat = 6
+    static let reorderBandFraction: CGFloat = 0.3
+}
+
+enum TabDropZone {
+    case reorder
+    case split
+
+    static func zone(at location: CGPoint) -> TabDropZone {
+        location.y > SidebarPalette.rowHeight * SidebarDropMetrics.reorderBandFraction ? .split : .reorder
+    }
 }
 
 struct RowBackground: View {
@@ -117,7 +127,7 @@ struct TabRow: View {
     @Bindable var node: SidebarNode
     let depth: Int
     @ViewState private var isHovering = false
-    @ViewState private var isDropTargeted = false
+    @ViewState private var dropZone: TabDropZone?
 
     private var isSelected: Bool { model.currentSpace.selectedNodeID == node.id }
     private var isLoaded: Bool { node.allTabs.contains { $0.page != nil } }
@@ -136,11 +146,30 @@ struct TabRow: View {
     }
 
     private func selectNode() {
+        guard !PointerClick.isDoubleClick else { return beginRenaming() }
         model.select(node)
     }
 
     private func beginRenaming() {
         model.renamingNodeID = node.id
+    }
+
+    private func zone(at location: CGPoint) -> TabDropZone {
+        isToday ? TabDropZone.zone(at: location) : .reorder
+    }
+
+    @discardableResult
+    private func handleDrop(_ items: [String], at location: CGPoint) -> Bool {
+        let droppedNodeID = items.first.flatMap(UUID.init(uuidString:))
+        if zone(at: location) == .split, let droppedNodeID, model.splitDropped(droppedNodeID, onto: node) { return true }
+        return SidebarDrop.handle(items, model: model, onto: node)
+    }
+
+    private func updateDropZone(_ session: DropSession) {
+        switch session.phase {
+        case .entering, .active: dropZone = zone(at: session.location)
+        default: dropZone = nil
+        }
     }
 
     var body: some View {
@@ -169,20 +198,19 @@ struct TabRow: View {
                     Spacer(minLength: 0)
                 }
             }
-            .padding(.leading, 10 + CGFloat(depth) * LayoutConstants.folderIndent)
+            .padding(.leading, (node.isSplit ? SplitRowMetrics.inset : 10) + CGFloat(depth) * LayoutConstants.folderIndent)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .contentShape(Rectangle())
-            .onTapGesture(count: 2, perform: beginRenaming)
             .onTapGesture(perform: selectNode)
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
             if isCapturing {
                 Circle().fill(Color.red).frame(width: 6, height: 6).accessibilityLabel("Usando cámara o micrófono")
             }
-            if isHovering || isSelected {
+            if (isHovering || isSelected) && !node.isSplit {
                 Button(action: performCloseAction) {
                     Image(systemName: closeSymbol)
-                        .font(.system(size: 13, weight: .regular))
-                        .frame(width: 28, height: SidebarPalette.rowHeight)
+                        .font(.system(size: 11, weight: .medium))
+                        .frame(width: 24, height: SidebarPalette.rowHeight)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -191,53 +219,108 @@ struct TabRow: View {
                 .accessibilityLabel(closeLabel)
             }
         }
-        .padding(.trailing, 6)
+        .padding(.trailing, node.isSplit ? SplitRowMetrics.inset : 6)
         .frame(height: SidebarPalette.rowHeight)
         .foregroundStyle(Color.primary.opacity(isSelected ? 1 : 0.75))
-        .background(RowBackground(isSelected: isSelected, isHovering: isHovering))
-        .dropIndicator(isDropTargeted, leadingInset: CGFloat(depth) * LayoutConstants.folderIndent)
+        .background {
+            if node.isSplit {
+                SplitRowBackground(isDropTargeted: dropZone == .split)
+            } else {
+                RowBackground(isSelected: isSelected || dropZone == .split, isHovering: isHovering)
+            }
+        }
+        .dropIndicator(dropZone == .reorder, leadingInset: CGFloat(depth) * LayoutConstants.folderIndent)
         .contentShape(Rectangle())
         .transition(.opacity.combined(with: .scale(scale: 0.92)))
         .clickable()
         .onHover { isHovering = $0 }
         .accessibilityElement(children: .contain)
         .draggable(node.id.uuidString)
-        .dropDestination(for: String.self) { items, _ in
-            SidebarDrop.handle(items, model: model, onto: node)
-        } isTargeted: { isDropTargeted = $0 }
+        .dropDestination(for: String.self) { items, session in
+            handleDrop(items, at: session.location)
+            dropZone = nil
+        }
+        .onDropSessionUpdated(updateDropZone)
         .contextMenu { NodeContextMenu(model: model, node: node) }
     }
 }
 
+enum SplitRowMetrics {
+    static let inset: CGFloat = 4
+    static let containerRadius: CGFloat = 12
+    static let segmentRadius: CGFloat = containerRadius - inset
+}
+
+struct SplitRowBackground: View {
+    let isDropTargeted: Bool
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: SplitRowMetrics.containerRadius, style: .continuous)
+            .fill(Color(nsColor: .textBackgroundColor).opacity(isDropTargeted ? 1 : 0.75))
+            .overlay(RoundedRectangle(cornerRadius: SplitRowMetrics.containerRadius, style: .continuous).strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.75))
+    }
+}
+
 struct SplitRowContent: View {
+
     @Bindable var model: WindowModel
     @Bindable var split: SidebarNode
     let isSelected: Bool
 
+    private func selectPane(_ pane: SidebarNode) {
+        model.select(split)
+        model.focusPane(pane.id)
+    }
+
+    private func closePane(_ pane: SidebarNode) {
+        model.focusPane(pane.id)
+        model.closeFocusedPane()
+    }
+
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(split.children.enumerated()), id: \.element.id) { index, pane in
-                if index > 0 {
-                    Rectangle()
-                        .fill(Color.primary.opacity(0.15))
-                        .frame(width: 1, height: 16)
-                        .padding(.horizontal, 6)
-                }
-                HStack(spacing: 6) {
-                    FaviconView(url: pane.liveURL, size: 15, allowsNetwork: pane.allowsFaviconNetwork)
-                    Text(pane.displayTitle.isEmpty ? "Nuevo panel" : pane.displayTitle)
-                        .font(.system(size: 13, weight: isSelected && pane.id == model.focusedPaneID ? .medium : .regular))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    model.select(split)
-                    model.focusPane(pane.id)
-                }
+        HStack(spacing: SplitRowMetrics.inset) {
+            ForEach(split.children) { pane in
+                SplitRowSegment(
+                    pane: pane,
+                    isFocused: isSelected && pane.id == model.focusedPaneID,
+                    onSelect: { selectPane(pane) },
+                    onClose: { closePane(pane) }
+                )
             }
         }
+        .padding(.vertical, SplitRowMetrics.inset)
+    }
+}
+
+struct SplitRowSegment: View {
+    @Bindable var pane: SidebarNode
+    let isFocused: Bool
+    let onSelect: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            FaviconView(url: pane.liveURL, size: 15, allowsNetwork: pane.allowsFaviconNetwork)
+            Text(pane.displayTitle.isEmpty ? "Nuevo panel" : pane.displayTitle)
+                .font(.system(size: 13, weight: isFocused ? .medium : .regular))
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 0)
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .frame(width: 16, height: 16)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel("Cerrar panel")
+        }
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: SplitRowMetrics.segmentRadius, style: .continuous).fill(Color.primary.opacity(isFocused ? 0.1 : 0.05)))
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onSelect)
     }
 }
 
@@ -250,6 +333,7 @@ struct FolderRow: View {
     @ViewState private var isDropTargeted = false
 
     private func toggleExpanded() {
+        guard !PointerClick.isDoubleClick else { return beginRenaming() }
         withAnimation(Motion.disclosure(reduceMotion: reduceMotion)) { node.isExpanded.toggle() }
         BrowserStore.shared.saveSoon()
     }
@@ -269,7 +353,7 @@ struct FolderRow: View {
                     .lineLimit(1)
             }
             Image(systemName: "chevron.right")
-                .font(.system(size: 10, weight: .regular))
+                .font(.system(size: 9, weight: .semibold))
                 .rotationEffect(.degrees(node.isExpanded ? 90 : 0))
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
@@ -291,18 +375,10 @@ struct FolderRow: View {
         .padding(.leading, 10 + CGFloat(depth) * LayoutConstants.folderIndent)
         .padding(.trailing, 8)
         .frame(height: SidebarViewMetrics.folderRowHeight)
-        .background(RowBackground(isSelected: false, isHovering: isHovering))
-        .overlay(alignment: .bottomLeading) {
-            if isDropTargeted {
-                DropIndicator(axis: .horizontal)
-                    .padding(.leading, CGFloat(depth + 1) * LayoutConstants.folderIndent)
-                    .offset(y: 5)
-            }
-        }
+        .background(RowBackground(isSelected: isDropTargeted, isHovering: isHovering))
         .animation(.snappy(duration: 0.15), value: isDropTargeted)
         .contentShape(Rectangle())
         .clickable()
-        .onTapGesture(count: 2, perform: beginRenaming)
         .onTapGesture(perform: toggleExpanded)
         .onHover { isHovering = $0 }
         .accessibilityElement(children: .combine)
@@ -315,6 +391,7 @@ struct FolderRow: View {
         .contextMenu { NativeMenuItems(entries: FolderMenu.entries(model: model, node: node)) }
         .popover(isPresented: Binding(get: { model.folderIconEditingID == node.id }, set: { if !$0 { model.folderIconEditingID = nil } }), arrowEdge: .trailing) {
             FolderIconPicker(folder: node) { model.folderIconEditingID = nil }
+                .matchingPopoverAppearance()
         }
     }
 }
@@ -431,6 +508,20 @@ enum FolderRemoval {
 
 @MainActor
 enum SidebarDrop {
+    @discardableResult
+    static func handleFavorite(_ items: [String], model: WindowModel, location: CGPoint, pageIndex: Int, availableWidth: CGFloat, columnCount: Int) -> Bool {
+        guard let payload = items.first else { return false }
+        let container = NodeContainer.favorites(profileID: model.currentSpace.profileID)
+        let sourceID = UUID(uuidString: payload)
+        let sourceIndex = model.favorites.firstIndex { $0.id == sourceID }
+        let pageSize = columnCount * SidebarViewMetrics.favoriteMaximumRows
+        let slot = min(SidebarViewMetrics.favoriteSlot(at: location, availableWidth: availableWidth, columnCount: columnCount), pageSize - 1)
+        let lastIndex = max(model.favorites.count - (sourceIndex == nil ? 0 : 1), 0)
+        let targetIndex = min(pageIndex * pageSize + slot, lastIndex)
+        let insertionIndex = sourceIndex.map { SidebarViewMetrics.favoriteDropIndex(sourceIndex: $0, targetIndex: targetIndex) } ?? targetIndex
+        return handle(items, model: model, container: container, index: insertionIndex)
+    }
+
     @discardableResult
     static func handle(_ items: [String], model: WindowModel, onto target: SidebarNode) -> Bool {
         let store = BrowserStore.shared

@@ -207,6 +207,7 @@ struct ParsecDropdown<Label: View>: View {
             .fixedSize()
             .popover(isPresented: $isPresented, arrowEdge: arrowEdge) {
                 DropdownList(entries: entries, width: width) { isPresented = false }
+                    .matchingPopoverAppearance()
             }
     }
 }

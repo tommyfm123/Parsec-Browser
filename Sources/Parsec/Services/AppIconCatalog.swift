@@ -20,7 +20,8 @@ enum AppIconCatalog {
 
     static func applySelected() {
         let selectedID = BrowserStore.shared.settings.appIconID
-        NSApp.applicationIconImage = options.first { $0.id == selectedID && $0.id != defaultID }?.image
+        let selectedImage = options.first { $0.id == selectedID && $0.id != defaultID }?.image
+        NSWorkspace.shared.setIcon(selectedImage, forFile: Bundle.main.bundlePath)
     }
 
     private static var defaultOption: AppIconOption {

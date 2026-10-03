@@ -25,7 +25,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MiniPopupController.shared.configure(isEnabled: store.settings.miniPopupEnabled)
         AssistantRoutineStore.shared.startScheduler()
         NSApp.mainMenu = MainMenu.build()
-        AppIconCatalog.applySelected()
         #if DEBUG
         DebugBridge.start()
         #endif

@@ -5,6 +5,7 @@ struct BrowserRootView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var store: BrowserStore { BrowserStore.shared }
+    private var usesFloatingSidebar: Bool { store.settings.layout == .sidebar && !model.isSidebarPinned }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -25,6 +26,9 @@ struct BrowserRootView: View {
         }
         .onChange(of: store.settings.layout, initial: true) { _, layout in
             (model.window as? BrowserWindow)?.trafficLightsCenterY = layout == .topTabs ? LayoutConstants.topBarHeight / 2 : SidebarView.trafficLightsCenterY
+        }
+        .onChange(of: usesFloatingSidebar, initial: true) { _, isFloating in
+            (model.window as? BrowserWindow)?.trafficLightsInset = isFloating ? SidebarView.outerInset : 0
         }
         .sheet(isPresented: $model.isNewSpacePresented) {
             NewSpaceView(model: model)
@@ -270,7 +274,7 @@ struct TopSpaceMenu: View {
                 Image(systemName: "chevron.down").font(.system(size: 7.5, weight: .bold)).foregroundStyle(.secondary)
             }
         }
-        .popover(isPresented: $model.isThemeEditorPresented, arrowEdge: .bottom) { ArcThemeEditor(space: model.currentSpace) }
+        .popover(isPresented: $model.isThemeEditorPresented, arrowEdge: .bottom) { ArcThemeEditor(space: model.currentSpace).matchingPopoverAppearance() }
         .help("Cambiar de Space")
     }
 }

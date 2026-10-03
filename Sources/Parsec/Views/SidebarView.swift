@@ -3,11 +3,10 @@ import UniformTypeIdentifiers
 
 struct SidebarView: View {
     static let outerInset = SidebarViewMetrics.outerInset
-    static let pinnedHeaderTopPadding: CGFloat = 8
-    static let floatingHeaderTopPadding: CGFloat = 4
-    static let headerHeight: CGFloat = 36
+    static let headerTopPadding: CGFloat = 8
+    static let headerHeight: CGFloat = 30
     static let horizontalPadding: CGFloat = 8
-    static let trafficLightsCenterY = pinnedHeaderTopPadding + headerHeight / 2
+    static let trafficLightsCenterY = headerTopPadding + headerHeight / 2
 
     @Bindable var model: WindowModel
     var isFloating = false
@@ -24,7 +23,7 @@ struct SidebarView: View {
             SidebarFooter(model: model)
         }
         .padding(.horizontal, Self.horizontalPadding)
-        .padding(.top, isFloating ? Self.floatingHeaderTopPadding : Self.pinnedHeaderTopPadding)
+        .padding(.top, Self.headerTopPadding)
         .padding(.bottom, 8)
         .frame(width: model.sidebarWidth)
         .frame(maxHeight: .infinity)
@@ -67,7 +66,7 @@ struct SidebarResizeHandle: View {
                     .onChanged { value in
                         let startWidth = widthAtDragStart ?? model.store.settings.sidebarWidth
                         widthAtDragStart = startWidth
-                        let proposedWidth = startWidth + value.translation.width
+                        let proposedWidth = (startWidth + value.translation.width).rounded()
                         model.store.settings.sidebarWidth = min(max(proposedWidth, BrowserSettings.sidebarWidthRange.lowerBound), BrowserSettings.sidebarWidthRange.upperBound)
                     }
                     .onEnded { _ in
@@ -104,9 +103,7 @@ struct SidebarCircleButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbolName)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 18, height: 18)
+                .font(.system(size: 13, weight: .medium))
                 .frame(width: SidebarView.headerHeight, height: SidebarView.headerHeight)
                 .background {
                     Circle().fill(SidebarPalette.glassFill(colorScheme, isActive: isHovering))
@@ -159,7 +156,7 @@ struct BrowserMoreMenu: View {
 
 struct AddressBar: View {
     @Bindable var model: WindowModel
-    var height: CGFloat = 36
+    var height: CGFloat = 32
     var alwaysShowsFullURL = false
     @ViewState private var isHovering = false
     @Environment(\.colorScheme) private var colorScheme
@@ -188,6 +185,7 @@ struct AddressBar: View {
                 .foregroundStyle(.secondary)
                 .popover(isPresented: $model.isSitePopoverPresented, arrowEdge: .bottom) {
                     SitePopoverView(model: model)
+                        .matchingPopoverAppearance()
                 }
         }
         .padding(.horizontal, 10)
@@ -206,8 +204,8 @@ struct AddressBar: View {
 }
 
 enum SidebarPalette {
-    static let rowHeight: CGFloat = 36
-    static let rowCornerRadius: CGFloat = 12
+    static let rowHeight: CGFloat = 32
+    static let rowCornerRadius: CGFloat = 10
 
     static func glassFill(_ colorScheme: ColorScheme, isActive: Bool) -> LinearGradient {
         let opacity = colorScheme == .dark ? (isActive ? 0.28 : 0.16) : (isActive ? 0.9 : 0.7)
@@ -230,12 +228,15 @@ enum SidebarPalette {
 
 struct FavoritesGrid: View {
     private static let spacing = SidebarViewMetrics.favoriteSpacing
-    private static let maximumRows = 3
     private static let tileHeight = SidebarViewMetrics.favoriteTileHeight
+    private static let pageEdgeWidth: CGFloat = 18
+    private static let pageAnimationDuration = 0.14
 
     @Bindable var model: WindowModel
     @ViewState private var isDropTargeted = false
-    @ViewState private var pageIndex: Int? = 0
+    @ViewState private var pageIndex = 0
+    @ViewState private var dragOffset: CGFloat = 0
+    @ViewState private var pageTurnDirection: Int?
     @ViewState private var draggedFavoriteID: UUID?
     @ViewState private var previewIDs: [UUID] = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -251,144 +252,138 @@ struct FavoritesGrid: View {
         return SidebarViewMetrics.favoriteColumnCount(availableWidth: innerWidth, favoriteCount: model.favorites.count)
     }
 
-    private var pagedHeight: CGFloat {
-        let firstPageCount = pages.first?.count ?? 0
-        let rows = CGFloat((firstPageCount + columnCount - 1) / columnCount)
-        return rows * Self.tileHeight + max(rows - 1, 0) * Self.spacing
-    }
+    private var pageSize: Int { columnCount * SidebarViewMetrics.favoriteMaximumRows }
+    private var pageCount: Int { max((model.favorites.count + pageSize - 1) / pageSize, 1) }
+    private var pageAnimation: Animation { .easeOut(duration: reduceMotion ? 0 : Self.pageAnimationDuration) }
 
-    private var pages: [[SidebarNode]] {
-        let pageSize = columnCount * Self.maximumRows
-        let favorites = displayedFavorites
-        return stride(from: 0, to: favorites.count, by: pageSize).map { start in
-            Array(favorites[start..<min(start + pageSize, favorites.count)])
-        }
+    private var pagedHeight: CGFloat {
+        let rows = CGFloat((min(model.favorites.count, pageSize) + columnCount - 1) / columnCount)
+        return max(rows * Self.tileHeight + max(rows - 1, 0) * Self.spacing, Self.tileHeight)
     }
 
     var body: some View {
-        VStack(spacing: 6) {
-            if pages.count > 1 {
-                ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: 0) {
-                        ForEach(Array(pages.enumerated()), id: \.offset) { index, nodes in
-                            page(nodes, index: index)
-                                .containerRelativeFrame(.horizontal)
-                                .id(index)
-                        }
+        VStack(spacing: 4) {
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                let columnWidth = SidebarViewMetrics.favoriteColumnWidth(availableWidth: width, columnCount: columnCount)
+                ZStack(alignment: .topLeading) {
+                    ForEach(Array(displayedFavorites.enumerated()), id: \.element.id) { index, node in
+                        FavoriteTile(model: model, node: node, isDragging: draggedFavoriteID == node.id) { draggedFavoriteID = node.id }
+                            .frame(width: columnWidth - Self.spacing)
+                            .offset(x: CGFloat(index / pageSize) * width + CGFloat(index % columnCount) * columnWidth, y: CGFloat((index % pageSize) / columnCount) * (Self.tileHeight + Self.spacing))
+                            .allowsHitTesting(index / pageSize == pageIndex)
                     }
-                    .scrollTargetLayout()
                 }
-                .scrollTargetBehavior(.paging)
-                .scrollIndicators(.never)
-                .scrollPosition(id: $pageIndex)
-                .frame(height: pagedHeight)
-                PageDots(count: pages.count, selection: $pageIndex)
-            } else {
-                page(pages.first ?? [], index: 0)
+                .frame(width: width * CGFloat(pageCount), height: pagedHeight, alignment: .topLeading)
+                .animation(Motion.snappy(reduceMotion: reduceMotion), value: displayedFavorites.map(\.id))
+                .offset(x: -CGFloat(pageIndex) * width + dragOffset)
+                .animation(pageAnimation, value: pageIndex)
+                .frame(width: width, height: pagedHeight, alignment: .leading)
+                .clipped()
+                .contentShape(Rectangle())
+                .background(SwipeMonitor(onChange: { trackSwipe($0, width: width) }, onEnd: { finishSwipe($0, width: width) }))
+                .dropDestination(for: String.self) { items, session in
+                    SidebarDrop.handleFavorite(items, model: model, location: session.location, pageIndex: pageIndex, availableWidth: width, columnCount: columnCount)
+                    finishDrag()
+                }
+                .dropConfiguration { _ in DropConfiguration(operation: .move) }
+                .onDropSessionUpdated { session in
+                    switch session.phase {
+                    case .entering, .active:
+                        isDropTargeted = true
+                        turnPage(at: session.location, width: width)
+                        previewDrop(at: session.location, width: width)
+                    default:
+                        isDropTargeted = false
+                    }
+                }
+            }
+            .frame(height: pagedHeight)
+            if pageCount > 1 {
+                PageDots(count: pageCount, selection: $pageIndex, animation: pageAnimation)
             }
         }
-        .frame(minHeight: model.favorites.isEmpty ? Self.tileHeight : nil)
         .overlay {
             if model.favorites.isEmpty {
                 Text("Arrastra aquí tus favoritos")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+                    .allowsHitTesting(false)
             }
         }
         .background(RoundedRectangle(cornerRadius: Radius.control + 1, style: .continuous).strokeBorder(Color.accentColor.opacity(isDropTargeted ? 0.6 : 0), lineWidth: 1.5))
         .dragConfiguration(DragConfiguration(operationsWithinApp: .init(allowCopy: true, allowMove: true), operationsOutsideApp: .init(allowCopy: false)))
         .onDragSessionUpdated { session in
             switch session.phase {
-            case .initial, .active:
-                break
             case .ended(let operation):
                 if operation == .cancel || operation == .forbidden { finishDrag() }
             case .dataTransferCompleted:
                 finishDrag()
-            @unknown default:
-                finishDrag()
-            }
-        }
-        .onChange(of: pages.count) { _, count in
-            pageIndex = min(pageIndex ?? 0, max(count - 1, 0))
-        }
-    }
-
-    private func page(_ nodes: [SidebarNode], index: Int) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.spacing), count: columnCount), spacing: Self.spacing) {
-            ForEach(nodes) { node in
-                FavoriteTile(model: model, node: node, isDragging: draggedFavoriteID == node.id) { draggedFavoriteID = node.id }
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: max(pagedHeight, Self.tileHeight), alignment: .top)
-        .contentShape(Rectangle())
-        .animation(Motion.snappy(reduceMotion: reduceMotion), value: nodes.map(\.id))
-        .dropDestination(for: String.self) { items, session in
-            guard let payload = items.first else { return }
-            let container = NodeContainer.favorites(profileID: model.currentSpace.profileID)
-            if let sourceID = UUID(uuidString: payload), let targetIndex = previewIDs.firstIndex(of: sourceID),
-               let sourceIndex = model.favorites.firstIndex(where: { $0.id == sourceID }) {
-                let insertionIndex = SidebarViewMetrics.favoriteDropIndex(sourceIndex: sourceIndex, targetIndex: targetIndex)
-                SidebarDrop.handle(items, model: model, container: container, index: insertionIndex)
-                finishDrag()
-                return
-            }
-            let innerWidth = model.sidebarWidth - SidebarView.horizontalPadding * 2
-            let slot = SidebarViewMetrics.favoriteSlot(at: session.location, availableWidth: innerWidth, columnCount: columnCount)
-            guard slot < nodes.count else {
-                let insertionIndex = index * columnCount * Self.maximumRows + nodes.count
-                SidebarDrop.handle(items, model: model, container: container, index: insertionIndex)
-                return
-            }
-            SidebarDrop.handle(items, model: model, onto: nodes[slot])
-        }
-        .dropConfiguration { _ in DropConfiguration(operation: .move) }
-        .onDropSessionUpdated { session in
-            switch session.phase {
-            case .entering, .active:
-                isDropTargeted = true
-                previewDrop(session, page: index)
-            case .exiting:
-                isDropTargeted = false
-                withAnimation(Motion.snappy(reduceMotion: reduceMotion)) { previewIDs = [] }
             default:
-                isDropTargeted = false
+                break
             }
+        }
+        .onChange(of: pageCount) { _, count in
+            pageIndex = min(pageIndex, count - 1)
         }
     }
 
-    private func previewDrop(_ session: DropSession, page: Int) {
+    private func previewDrop(at location: CGPoint, width: CGFloat) {
         guard let sourceID = draggedFavoriteID, model.favorites.contains(where: { $0.id == sourceID }) else { return }
-        let innerWidth = model.sidebarWidth - SidebarView.horizontalPadding * 2
-        let slot = SidebarViewMetrics.favoriteSlot(at: session.location, availableWidth: innerWidth, columnCount: columnCount)
-        let targetIndex = page * columnCount * Self.maximumRows + slot
+        let slot = SidebarViewMetrics.favoriteSlot(at: location, availableWidth: width, columnCount: columnCount)
+        let targetIndex = pageIndex * pageSize + min(slot, pageSize - 1)
         let ids = previewIDs.isEmpty ? model.favorites.map(\.id) : previewIDs
         let reordered = SidebarViewMetrics.favoriteOrder(ids, moving: sourceID, to: targetIndex)
         guard reordered != previewIDs else { return }
         withAnimation(Motion.snappy(reduceMotion: reduceMotion)) { previewIDs = reordered }
     }
 
+    private func turnPage(at location: CGPoint, width: CGFloat) {
+        guard draggedFavoriteID != nil else { return }
+        let direction = location.x < Self.pageEdgeWidth ? -1 : location.x > width - Self.pageEdgeWidth ? 1 : 0
+        guard direction != 0 else { return pageTurnDirection = nil }
+        guard pageTurnDirection != direction else { return }
+        pageTurnDirection = direction
+        pageIndex = min(max(pageIndex + direction, 0), pageCount - 1)
+    }
+
+    private func trackSwipe(_ offset: CGFloat, width: CGFloat) {
+        guard draggedFavoriteID == nil else { return }
+        let isAtEdge = (pageIndex == 0 && offset > 0) || (pageIndex == pageCount - 1 && offset < 0)
+        dragOffset = isAtEdge ? offset / 4 : offset
+    }
+
+    private func finishSwipe(_ offset: CGFloat, width: CGFloat) {
+        guard draggedFavoriteID == nil else { return }
+        withAnimation(pageAnimation) {
+            dragOffset = 0
+            guard abs(offset) > width * LayoutConstants.swipeCommitThreshold else { return }
+            pageIndex = min(max(pageIndex + (offset < 0 ? 1 : -1), 0), pageCount - 1)
+        }
+    }
+
     private func finishDrag() {
         withAnimation(Motion.snappy(reduceMotion: reduceMotion)) {
             previewIDs = []
             draggedFavoriteID = nil
+            pageTurnDirection = nil
             isDropTargeted = false
+            dragOffset = 0
         }
     }
 }
 
 struct PageDots: View {
     let count: Int
-    @Binding var selection: Int?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Binding var selection: Int
+    let animation: Animation
 
     var body: some View {
         HStack(spacing: 6) {
             ForEach(0..<count, id: \.self) { index in
-                Button { withAnimation(Motion.snappy(reduceMotion: reduceMotion)) { selection = index } } label: {
+                Button { withAnimation(animation) { selection = index } } label: {
                     Circle()
-                        .fill(Color.primary.opacity((selection ?? 0) == index ? 0.55 : 0.18))
+                        .fill(Color.primary.opacity(selection == index ? 0.55 : 0.18))
                         .frame(width: 5, height: 5)
                         .frame(width: 12, height: 12)
                         .contentShape(Rectangle())
@@ -397,7 +392,7 @@ struct PageDots: View {
                 .accessibilityLabel("Página \(index + 1) de \(count)")
                 .dropDestination(for: String.self) { _, _ in false } isTargeted: { isTargeted in
                     guard isTargeted else { return }
-                    withAnimation(Motion.snappy(reduceMotion: reduceMotion)) { selection = index }
+                    withAnimation(animation) { selection = index }
                 }
             }
         }
@@ -415,7 +410,7 @@ struct FavoriteTile: View {
     private var isSelected: Bool { model.currentSpace.selectedNodeID == node.id }
 
     var body: some View {
-        FaviconView(url: node.liveURL ?? node.children.first?.liveURL, size: 18, allowsNetwork: node.allowsFaviconNetwork)
+        FaviconView(url: node.liveURL ?? node.children.first?.liveURL, size: 16, allowsNetwork: node.allowsFaviconNetwork)
             .frame(maxWidth: .infinity)
             .frame(height: SidebarViewMetrics.favoriteTileHeight)
             .background(
@@ -467,9 +462,10 @@ struct SidebarFooter: View {
             .frame(width: min(CGFloat(model.spaces.count) * 14 + 16, 120), height: 24)
             .background(Capsule().fill(SidebarPalette.glassFill(colorScheme, isActive: false)))
             .overlay(Capsule().strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.75))
-            .popover(isPresented: $model.isThemeEditorPresented, arrowEdge: .top) { ArcThemeEditor(space: model.currentSpace) }
+            .popover(isPresented: $model.isThemeEditorPresented, arrowEdge: .top) { ArcThemeEditor(space: model.currentSpace).matchingPopoverAppearance() }
             .popover(isPresented: Binding(get: { model.spaceIconEditingID != nil }, set: { if !$0 { model.spaceIconEditingID = nil } }), arrowEdge: .top) {
                 SpaceIconPicker(space: model.currentSpace) { model.spaceIconEditingID = nil }
+                    .matchingPopoverAppearance()
             }
             Spacer(minLength: 0)
             SidebarCircleButton(symbolName: DownloadManager.shared.activeCount > 0 ? "arrow.down.circle.fill" : "arrow.down.to.line", label: "Descargas", action: openDownloads)
@@ -491,7 +487,7 @@ struct SidebarProfileMenu: View {
     var body: some View {
         ParsecDropdown(arrowEdge: .top, entries: entries) {
             Image(systemName: model.isPrivate ? "eyeglasses" : profile?.iconSymbol ?? "person.crop.circle.fill")
-                .font(.system(size: 24, weight: .regular))
+                .font(.system(size: 20, weight: .regular))
                 .symbolRenderingMode(.hierarchical)
                 .frame(width: SidebarView.headerHeight, height: SidebarView.headerHeight)
                 .background(Circle().fill(SidebarPalette.glassFill(colorScheme, isActive: false)))
@@ -536,7 +532,6 @@ struct SpaceDot: View {
                 Button(action: action) { dot }.buttonStyle(.plain)
             }
         }
-        .hoverHighlight()
         .onHover { isHovering = $0 }
         .contextMenu {
             if !model.isPrivate { NativeMenuItems(entries: SpaceMenu.entries(model: model, space: space)) }

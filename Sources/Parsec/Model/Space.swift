@@ -156,7 +156,7 @@ enum SidebarLayout: String, Codable, CaseIterable {
 struct BrowserSettings: Codable {
     static let defaultSidebarWidth: Double = 264
     static let legacySuspendAfterMinutes = 30
-    static let defaultSuspendAfterMinutes = 5
+    static let defaultSuspendAfterMinutes = 0
     static let sidebarWidthRange: ClosedRange<Double> = 210...460
 
     var layout: SidebarLayout = .sidebar

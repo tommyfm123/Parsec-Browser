@@ -29,6 +29,13 @@ enum AssistantProviderKind: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    @MainActor var pickerTitle: String {
+        switch self {
+        case .claudeCode, .codexCLI: assistantName
+        default: displayName
+        }
+    }
+
     @MainActor var assistantName: String {
         switch self {
         case .claudeCode, .anthropicAPI: "Claude"

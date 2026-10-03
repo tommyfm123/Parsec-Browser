@@ -24,6 +24,7 @@ final class SidebarNode: Identifiable, @MainActor Codable {
     var customTitle: String?
 
     var page: WebPage?
+    @ObservationIgnored var suspendedInteractionState: Any?
 
     enum CodingKeys: String, CodingKey {
         case id

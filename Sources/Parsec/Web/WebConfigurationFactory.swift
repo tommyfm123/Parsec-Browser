@@ -13,6 +13,15 @@ enum WebConfigurationFactory {
     private static let pictureInPictureKey = "allowsPictureInPictureMediaPlayback"
     private static let cacheDataTypes: Set<String> = [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache]
     private static let applicationNameForUserAgent = "Version/19.0 Safari/605.1.15"
+    static let windowMetricsScript = """
+    (() => {
+        if (window.outerWidth) return;
+        Object.defineProperties(window, {
+            outerWidth: { configurable: true, get: () => window.innerWidth },
+            outerHeight: { configurable: true, get: () => window.innerHeight }
+        });
+    })();
+    """
     private static var dataStores: [UUID: WKWebsiteDataStore] = [:]
     private static var privateDataStores: [UUID: WKWebsiteDataStore] = [:]
     private static let autofillScriptSource: String = {
@@ -85,6 +94,7 @@ enum WebConfigurationFactory {
 
     private static func makeUserContentController() -> WKUserContentController {
         let controller = WKUserContentController()
+        controller.addUserScript(WKUserScript(source: windowMetricsScript, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
         let autofillScript = WKUserScript(source: autofillScriptSource, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: autofillWorld)
         controller.addUserScript(autofillScript)
         controller.add(AutofillMessageRouter.shared, contentWorld: autofillWorld, name: autofillHandlerName)

@@ -128,6 +128,21 @@ struct ParsecAudit {
         let auditHost = AuditHost()
         privatePage.host = auditHost
         let controller = privatePage.webView.configuration.userContentController
+        guard let docsMetricsScript = controller.userScripts.first(where: { $0.source == WebConfigurationFactory.googleDocsWindowMetricsScript }) else {
+            throw NSError(domain: "ParsecAudit", code: 1, userInfo: [NSLocalizedDescriptionKey: "Google Docs window metrics script missing"])
+        }
+        try expect(docsMetricsScript.injectionTime == .atDocumentStart && docsMetricsScript.isForMainFrameOnly, "Docs metrics run before its canvas renderer starts")
+        let metricsFixture = """
+        const location = { hostname: host };
+        const window = { outerWidth: width, outerHeight: height, innerWidth: 816, innerHeight: 1056 };
+        \(docsMetricsScript.source)
+        window.innerWidth = 1024;
+        window.innerHeight = 768;
+        return [window.outerWidth, window.outerHeight];
+        """
+        try expect(try await evaluate(metricsFixture, in: privatePage, arguments: ["host": "docs.google.com", "width": 0, "height": 0]) as? [Int] == [1024, 768], "Docs missing window metrics follow viewport resizing")
+        try expect(try await evaluate(metricsFixture, in: privatePage, arguments: ["host": "docs.google.com", "width": 1280, "height": 900]) as? [Int] == [1280, 900], "Docs valid native window metrics remain intact")
+        try expect(try await evaluate(metricsFixture, in: privatePage, arguments: ["host": "other.example", "width": 0, "height": 0]) as? [Int] == [0, 0], "Docs window metric workaround leaves other sites unchanged")
         controller.add(frameCapture, contentWorld: .defaultClient, name: "auditFrame")
         controller.addUserScript(WKUserScript(source: "window.webkit.messageHandlers.auditFrame.postMessage(window === top ? 'main' : 'child');", injectionTime: .atDocumentEnd, forMainFrameOnly: false, in: .defaultClient))
         _ = try await evaluate("window.webkit.messageHandlers.auditFrame.postMessage('main'); const frame = document.createElement('iframe'); frame.src = '/embedded'; document.body.appendChild(frame); return true;", in: privatePage)
@@ -207,6 +222,23 @@ struct ParsecAudit {
         commandBar.query = "changed audit command selection"
         try expect(commandBar.selectedIndex == 0 && commandBar.results.first?.id != searchResult.id, "changed query rebuilds results and resets selection")
         store.remove(commandTab.id)
+        let favoriteTabs = (0..<10).map { SidebarNode.tab(url: baseURL, title: "Favorite \($0)") }
+        profile.favorites = favoriteTabs
+        let originalFavoriteIDs = favoriteTabs.map(\.id)
+        let forwardDrop = SidebarDrop.handleFavorite([favoriteTabs[0].id.uuidString], model: model, location: CGPoint(x: 100, y: 22), pageIndex: 0, availableWidth: 194, columnCount: 3)
+        try expect(forwardDrop && profile.favorites[1].id == favoriteTabs[0].id && profile.favorites[0].id == favoriteTabs[1].id, "favorite drop commits the pointer slot without preview state")
+        SidebarDrop.handleFavorite([favoriteTabs[0].id.uuidString], model: model, location: CGPoint(x: 30, y: 22), pageIndex: 0, availableWidth: 194, columnCount: 3)
+        try expect(profile.favorites.map(\.id) == originalFavoriteIDs, "backward favorite drop restores the requested order")
+        SidebarDrop.handleFavorite([favoriteTabs[9].id.uuidString], model: model, location: CGPoint(x: 30, y: 22), pageIndex: 0, availableWidth: 194, columnCount: 3)
+        try expect(profile.favorites.first?.id == favoriteTabs[9].id && profile.favorites.count == 10, "cross-page favorite drop retains every favorite")
+        SidebarDrop.handleFavorite([favoriteTabs[9].id.uuidString], model: model, location: CGPoint(x: 170, y: 122), pageIndex: 1, availableWidth: 194, columnCount: 3)
+        try expect(profile.favorites.map(\.id) == originalFavoriteIDs, "sparse-page drop clamps to the final favorite slot")
+        SidebarDrop.handleFavorite([favoriteTabs[0].id.uuidString], model: model, location: CGPoint(x: 100, y: 22), pageIndex: 0, availableWidth: 194, columnCount: 3)
+        store.saveNow()
+        let savedStateURL = StorageConstants.applicationSupportURL.appending(path: StorageConstants.stateFileName)
+        let savedState = try JSONDecoder().decode(PersistedState.self, from: Data(contentsOf: savedStateURL))
+        try expect(savedState.profiles.first?.favorites.map(\.id) == profile.favorites.map(\.id), "committed favorite order survives a disk round trip")
+        profile.favorites = []
         let otherProfile = Profile(name: "Second audit profile")
         store.profiles.append(otherProfile)
         let otherSpace = Space(title: "Second audit space", profileID: otherProfile.id)

@@ -274,7 +274,7 @@ struct SplitDivider: View {
         .onHover { isHovering = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovering)
         .gesture(
-            DragGesture(minimumDistance: 1)
+            DragGesture(minimumDistance: 1, coordinateSpace: .global)
                 .onChanged { value in
                     isDragging = true
                     onDrag(value.translation.width - lastTranslation)

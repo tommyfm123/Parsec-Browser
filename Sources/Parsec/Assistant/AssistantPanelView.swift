@@ -56,10 +56,8 @@ struct ProviderLogo: View {
     var size: CGFloat = 30
 
     var body: some View {
-        FaviconView(url: provider.logoURL, size: size * 0.56)
+        FaviconView(url: provider.logoURL, size: size)
             .frame(width: size, height: size)
-            .background(Circle().fill(Color.white))
-            .overlay(Circle().strokeBorder(Color.black.opacity(0.08)))
     }
 }
 
@@ -736,15 +734,14 @@ struct ModelPicker: View {
     var body: some View {
         Button { isPresented.toggle() } label: {
             HStack(spacing: 6) {
-                ProviderLogo(provider: current.provider, size: compact ? 16 : 18)
+                ProviderLogo(provider: current.provider, size: compact ? 13 : 14)
                 Text(current.title).font(.system(size: compact ? 11.5 : 12, weight: .medium)).lineLimit(1)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 7.5, weight: .bold))
                     .rotationEffect(.degrees(isPresented ? 180 : 0))
             }
             .foregroundStyle(isPresented ? Color.primary : Color.secondary)
-            .padding(.leading, 5)
-            .padding(.trailing, 9)
+            .padding(.horizontal, 10)
             .frame(height: compact ? 26 : 30)
             .background(Capsule().fill(Color.primary.opacity(isPresented ? 0.12 : 0.055)))
             .contentShape(Capsule())
@@ -771,41 +768,41 @@ struct ModelPickerPopover: View {
             content
             ScrollView { content }.scrollIndicators(.never)
         }
-        .frame(width: 300)
-        .frame(maxHeight: 460)
+        .frame(width: 320)
+        .frame(maxHeight: 520)
         .task { await localModels.refresh() }
     }
 
     private var content: some View {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(ModelCatalog.availableProviders.filter { $0 != .localModels }) { provider in
-                    ModelSection(provider: provider) {
-                        ForEach(ModelCatalog.options(for: provider)) { option in
-                            ModelOptionRow(option: option, isSelected: option == current) { choose(option) }
-                        }
-                    }
-                }
-                ModelSection(provider: .localModels) {
-                    ForEach(ModelCatalog.options(for: .localModels)) { option in
+        VStack(alignment: .leading, spacing: 14) {
+            ForEach(ModelCatalog.availableProviders.filter { $0 != .localModels }) { provider in
+                ModelSection(provider: provider) {
+                    ForEach(ModelCatalog.options(for: provider)) { option in
                         ModelOptionRow(option: option, isSelected: option == current) { choose(option) }
                     }
-                    if localModels.isServerRunning {
-                        ForEach(LocalModels.suggestions.filter { !localModels.isInstalled($0.name) }) { suggestion in
-                            LocalModelDownloadRow(suggestion: suggestion, progress: localModels.downloadProgress[suggestion.name]) {
-                                localModels.download(suggestion.name)
-                            }
-                        }
-                    } else {
-                        OllamaInstallRow()
-                    }
-                }
-                Divider().padding(.horizontal, 6)
-                PopoverActionRow(title: "Configurar proveedores…", symbolName: "gearshape") {
-                    onDismiss()
-                    AppDelegate.shared.openSettings(section: .assistant)
                 }
             }
-            .padding(8)
+            ModelSection(provider: .localModels) {
+                ForEach(ModelCatalog.options(for: .localModels)) { option in
+                    ModelOptionRow(option: option, isSelected: option == current) { choose(option) }
+                }
+                if localModels.isServerRunning {
+                    ForEach(LocalModels.suggestions.filter { !localModels.isInstalled($0.name) }) { suggestion in
+                        LocalModelDownloadRow(suggestion: suggestion, progress: localModels.downloadProgress[suggestion.name]) {
+                            localModels.download(suggestion.name)
+                        }
+                    }
+                } else {
+                    OllamaInstallRow()
+                }
+            }
+            Divider().padding(.horizontal, 4)
+            PopoverActionRow(title: "Configurar proveedores…", symbolName: "gearshape") {
+                onDismiss()
+                AppDelegate.shared.openSettings(section: .assistant)
+            }
+        }
+        .padding(10)
     }
 
     private func choose(_ option: ModelOption) {
@@ -819,13 +816,11 @@ struct ModelSection<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 7) {
-                ProviderLogo(provider: provider, size: 16)
-                Text(provider.displayName).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 8)
-            .padding(.bottom, 3)
+        VStack(alignment: .leading, spacing: 3) {
+            Text(provider.pickerTitle)
+                .font(.system(size: 15, weight: .semibold))
+                .padding(.horizontal, 10)
+                .padding(.bottom, 4)
             content
         }
     }
@@ -839,8 +834,9 @@ struct ModelOptionRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(option.title).font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                ProviderLogo(provider: option.provider, size: 16)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(option.title).font(.system(size: 13, weight: .medium))
                     if !option.detail.isEmpty {
                         Text(option.detail).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                     }
@@ -851,11 +847,11 @@ struct ModelOptionRow: View {
                     .foregroundStyle(Color.accentColor)
                     .opacity(isSelected ? 1 : 0)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.accentColor.opacity(isSelected ? 0.12 : 0)))
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .hoverHighlight(cornerRadius: 8)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.accentColor.opacity(isSelected ? 0.14 : 0)))
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .hoverHighlight(cornerRadius: 10)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -915,8 +911,9 @@ struct OllamaInstallRow: View {
             }
             .controlSize(.small)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.045)))
     }
 }
 
@@ -931,10 +928,10 @@ struct PopoverActionRow: View {
                 .font(.system(size: 12.5))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 8)
-                .frame(height: 30)
-                .contentShape(Rectangle())
-                .hoverHighlight(cornerRadius: 8)
+                .padding(.horizontal, 10)
+                .frame(height: 32)
+                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .hoverHighlight(cornerRadius: 10)
         }
         .buttonStyle(.plain)
     }

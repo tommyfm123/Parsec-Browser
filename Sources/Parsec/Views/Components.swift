@@ -21,7 +21,7 @@ enum Motion {
     }
 
     static func disclosure(reduceMotion: Bool) -> Animation {
-        reduceMotion ? .easeInOut(duration: 0.12) : .spring(response: 0.3, dampingFraction: 0.88)
+        reduceMotion ? .easeInOut(duration: 0.1) : .spring(response: 0.2, dampingFraction: 0.92)
     }
 }
 
@@ -277,6 +277,10 @@ struct HoverHighlight: ViewModifier {
     }
 }
 
+enum PointerClick {
+    static var isDoubleClick: Bool { (NSApp.currentEvent?.clickCount ?? 1) > 1 }
+}
+
 extension View {
     func clickable() -> some View {
         pointerStyle(.link)
@@ -346,9 +350,21 @@ struct ThemedForeground: ViewModifier {
     }
 }
 
+struct PopoverAppearance: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content.preferredColorScheme(colorScheme)
+    }
+}
+
 extension View {
     func themedForeground(_ theme: SpaceTheme) -> some View {
         modifier(ThemedForeground(theme: theme))
+    }
+
+    func matchingPopoverAppearance() -> some View {
+        modifier(PopoverAppearance())
     }
 }
 

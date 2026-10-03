@@ -82,12 +82,13 @@ enum LittleWindowMetrics {
 
 enum SidebarViewMetrics {
     static let outerInset: CGFloat = 8
-    static let folderRowHeight: CGFloat = 38
-    static let folderIconSize: CGFloat = 19
-    static let folderTitleSize: CGFloat = 14
+    static let folderRowHeight: CGFloat = 32
+    static let folderIconSize: CGFloat = 15
+    static let folderTitleSize: CGFloat = 13
     static let favoriteSpacing: CGFloat = 6
-    static let favoriteTileHeight: CGFloat = 44
-    static let preferredFavoriteTileWidth: CGFloat = 60
+    static let favoriteTileHeight: CGFloat = 38
+    static let favoriteMaximumRows = 3
+    static let preferredFavoriteTileWidth: CGFloat = 52
     static let minimumFavoriteColumns = 3
 
     static func favoriteColumnCount(availableWidth: CGFloat, favoriteCount: Int) -> Int {
@@ -99,8 +100,13 @@ enum SidebarViewMetrics {
         sourceIndex < targetIndex ? targetIndex + 1 : targetIndex
     }
 
+    static func favoriteColumnWidth(availableWidth: CGFloat, columnCount: Int) -> CGFloat {
+        let evenPixelStep: CGFloat = 2
+        return ((availableWidth + favoriteSpacing) / CGFloat(columnCount) / evenPixelStep).rounded(.down) * evenPixelStep
+    }
+
     static func favoriteSlot(at location: CGPoint, availableWidth: CGFloat, columnCount: Int) -> Int {
-        let columnWidth = (availableWidth + favoriteSpacing) / CGFloat(columnCount)
+        let columnWidth = favoriteColumnWidth(availableWidth: availableWidth, columnCount: columnCount)
         let column = min(max(Int(location.x / columnWidth), 0), columnCount - 1)
         let row = max(Int(location.y / (favoriteTileHeight + favoriteSpacing)), 0)
         return row * columnCount + column

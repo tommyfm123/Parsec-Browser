@@ -141,7 +141,7 @@ final class WindowModel: WebPageHost {
     }
 
     var sidebarWidth: CGFloat {
-        CGFloat(store.settings.sidebarWidth)
+        CGFloat(store.settings.sidebarWidth).rounded()
     }
 
     var isChromeVisible: Bool {
@@ -432,6 +432,24 @@ extension WindowModel {
         store.move(droppedNodeID, into: .split(nodeID: selectedNode.id))
         select(selectedNode)
         focusedPaneID = droppedNodeID
+    }
+
+    @discardableResult
+    func splitDropped(_ droppedNodeID: UUID, onto target: SidebarNode) -> Bool {
+        guard !isPrivate, droppedNodeID != target.id, isTodayNode(target), let dropped = store.node(droppedNodeID), dropped.isTab,
+              isTodayNode(dropped), !target.contains(nodeID: droppedNodeID) else { return false }
+        guard target.isSplit else {
+            createSplit(primary: target, partner: dropped)
+            return true
+        }
+        guard target.children.count < LifecycleConstants.maxSplitPanes else {
+            showToast("Máximo 4 paneles")
+            return true
+        }
+        store.move(droppedNodeID, into: .split(nodeID: target.id))
+        select(target)
+        focusedPaneID = droppedNodeID
+        return true
     }
 
     func closeFocusedPane() {

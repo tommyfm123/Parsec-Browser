@@ -413,12 +413,19 @@ extension BrowserStore {
         page.node = node
         page.isAutoPeekSource = isPinnedOrFavorite(node.id)
         node.page = page
-        if configuration == nil, let url = node.url { page.load(url) }
+        let restoredState = node.suspendedInteractionState
+        node.suspendedInteractionState = nil
+        if configuration == nil, let url = node.url { page.load(url, restoring: restoredState) }
         return page
     }
 
     func unloadPages(in node: SidebarNode) {
         node.allTabs.forEach(unloadPage)
+    }
+
+    func suspendPage(_ node: SidebarNode) {
+        node.suspendedInteractionState = node.page?.webView.interactionState
+        unloadPage(node)
     }
 
     func unloadPage(_ node: SidebarNode) {
@@ -476,7 +483,7 @@ extension BrowserStore {
         Task { [weak node, weak page] in
             guard let node, let page, await isIdle(page), node.page === page, node.lastActiveAt == lastActiveAt,
                   !visibleNodeIDs().contains(node.id) else { return }
-            unloadPage(node)
+            suspendPage(node)
         }
     }
 

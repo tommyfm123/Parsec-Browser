@@ -20,6 +20,9 @@ final class BrowserWindow: NSWindow, NSWindowDelegate {
     var trafficLightsCenterY: CGFloat = 0 {
         didSet { layoutTrafficLights() }
     }
+    var trafficLightsInset: CGFloat = 0 {
+        didSet { layoutTrafficLights() }
+    }
     private var findQuery = ""
 
     init(model: WindowModel) {
@@ -55,7 +58,7 @@ final class BrowserWindow: NSWindow, NSWindowDelegate {
     }
 
     func layoutTrafficLights() {
-        positionTrafficLights(centerY: trafficLightsCenterY, leadingInset: Self.trafficLightsLeadingInset)
+        positionTrafficLights(centerY: trafficLightsCenterY + trafficLightsInset, leadingInset: Self.trafficLightsLeadingInset + trafficLightsInset)
     }
 
     func windowDidResize(_ notification: Notification) {

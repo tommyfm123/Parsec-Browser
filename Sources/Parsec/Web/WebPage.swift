@@ -116,8 +116,8 @@ final class WebPage: NSObject {
         observeWebView()
     }
 
-    func load(_ url: URL) {
-        scheduleLoad(url)
+    func load(_ url: URL, restoring interactionState: Any? = nil) {
+        scheduleLoad(url, restoring: interactionState)
     }
 
     func applyBlockerRules() {
@@ -177,7 +177,7 @@ final class WebPage: NSObject {
         scheduleLoad(url)
     }
 
-    private func scheduleLoad(_ url: URL) {
+    private func scheduleLoad(_ url: URL, restoring interactionState: Any? = nil) {
         guard !isTornDown else { return }
         loadTask?.cancel()
         hasTerminated = false
@@ -189,6 +189,10 @@ final class WebPage: NSObject {
                 return
             }
             applyBlockerRules()
+            if let interactionState {
+                webView.interactionState = interactionState
+                return
+            }
             if url.isFileURL {
                 webView.loadFileURL(url, allowingReadAccessTo: url)
                 return
@@ -373,7 +377,7 @@ extension WebPage: WKNavigationDelegate {
         hasTerminated = true
         guard let node, node.page === self else { return }
         guard BrowserStore.shared.visibleNodeIDs().contains(node.id) else {
-            BrowserStore.shared.unloadPage(node)
+            BrowserStore.shared.suspendPage(node)
             return
         }
         webView.reload()
