@@ -59,6 +59,7 @@ final class WindowModel: WebPageHost {
     var passwordOffer: PasswordOffer?
     var credentialChoices: [SavedCredential] = []
     var fillSuggestionHost: String?
+    private var autofillAttemptedURL: URL?
     var focusedPaneID: UUID?
     var isThemeEditorPresented = false
     var isNewSpacePresented = false
@@ -752,7 +753,15 @@ extension WindowModel {
 
     func suggestPasswordFill(for page: WebPage) {
         guard page === activePage, passwordOffer == nil, credentialChoices.isEmpty else { return }
-        fillSuggestionHost = page.currentHost
+        guard store.settings.autofillsPasswords else { return fillSuggestionHost = page.currentHost }
+        guard autofillAttemptedURL != page.currentURL else { return }
+        autofillAttemptedURL = page.currentURL
+        fillPassword()
+    }
+
+    func suggestCredentialChoices(for page: WebPage) {
+        guard page === activePage, passwordOffer == nil, credentialChoices.isEmpty else { return }
+        credentialChoices = PasswordVault.shared.credentials(forHost: page.currentHost)
     }
 
     func acceptFillSuggestion() {

@@ -1204,8 +1204,11 @@ struct PasswordSettings: View {
 
     var body: some View {
         SettingsGroup(title: "Cómo funciona", footer: "Exporta desde passwords.google.com (Configuración → Exportar), desde chrome://password-manager/settings en Arc o Chrome, o desde la app Contraseñas (Archivo → Exportar). Borra el CSV después de importarlo.") {
-            SettingsItem(symbolName: "key.fill", tint: .gray, title: "Rellenar contraseñas", detail: "Al entrar a un sitio con una contraseña guardada, Parsec te ofrece rellenarla con Touch ID. También con ⌘\\ o la llave de la barra de dirección.") {
+            SettingsItem(symbolName: "key.fill", tint: .gray, title: "Rellenar contraseñas", detail: "Al entrar a un sitio con una contraseña guardada, Parsec pide Touch ID y la rellena solo. Si hay varias cuentas te deja elegir. También con ⌘\\ o la llave de la barra de dirección.") {
                 Text("⌘\\").font(.system(size: 12, weight: .semibold, design: .rounded)).foregroundStyle(.secondary)
+            }
+            SettingsItem(symbolName: "touchid", tint: .green, title: "Rellenar automáticamente", detail: "Si está apagado, Parsec solo te ofrece rellenar.") {
+                Toggle("Rellenar automáticamente", isOn: autofillBinding).labelsHidden()
             }
             SettingsItem(symbolName: "square.and.arrow.down", tint: .blue, title: "Importar desde CSV", detail: "Google, Chrome, Arc, Apple Contraseñas, 1Password o Bitwarden.") {
                 Button("Importar…", action: importPasswords)
@@ -1250,6 +1253,10 @@ struct PasswordSettings: View {
         }
         if !statusMessage.isEmpty { SettingsStatus(message: statusMessage) }
         Color.clear.frame(height: 0).onAppear(perform: reload)
+    }
+
+    private var autofillBinding: Binding<Bool> {
+        Binding(get: { store.settings.autofillsPasswords }, set: { store.settings.autofillsPasswords = $0; store.saveSoon() })
     }
 
     private func reload() {
