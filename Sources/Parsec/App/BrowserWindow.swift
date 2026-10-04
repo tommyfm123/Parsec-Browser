@@ -10,6 +10,8 @@ final class BrowserWindow: NSWindow, NSWindowDelegate {
         }
     }
 
+    @objc func _hasActiveAppearanceIgnoringKeyFocus() -> Bool { true }
+
     private static let frameAutosaveName = "ParsecMainWindow"
     private static let privateTitle = "Parsec — Privado"
 
