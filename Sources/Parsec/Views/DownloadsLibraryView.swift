@@ -88,10 +88,7 @@ struct DownloadsLibraryView: View {
                 .padding(Self.panelInset)
         }
         .frame(width: Self.size.width, height: Self.size.height)
-        .background {
-            VisualEffectBackground(material: .hudWindow)
-                .overlay(Color(nsColor: .windowBackgroundColor).opacity(0.88))
-        }
+        .background(OpaqueWindowBackground())
         .ignoresSafeArea()
         .task { refreshHistory() }
         .confirmationDialog("¿Eliminar esta descarga?", item: $itemToDelete) { item in

@@ -84,6 +84,15 @@ struct VisualEffectBackground: NSViewRepresentable {
     }
 }
 
+struct OpaqueWindowBackground: View {
+    private static let windowColorOpacity = 0.88
+
+    var body: some View {
+        VisualEffectBackground(material: .hudWindow)
+            .overlay(Color(nsColor: .windowBackgroundColor).opacity(Self.windowColorOpacity))
+    }
+}
+
 final class WindowDragNSView: NSView {
     override var mouseDownCanMoveWindow: Bool { true }
 

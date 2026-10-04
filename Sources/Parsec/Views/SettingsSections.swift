@@ -56,7 +56,7 @@ struct SettingsView: View {
                 .padding(Self.panelInset)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(VisualEffectBackground(material: .hudWindow))
+        .background(OpaqueWindowBackground())
         .ignoresSafeArea()
     }
 
