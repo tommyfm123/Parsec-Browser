@@ -20,6 +20,7 @@ final class SidebarNode: Identifiable, @MainActor Codable {
     var isExpanded: Bool
     var lastActiveAt: Date
     var iconSymbol: String?
+    var iconColor: ThemeColor?
     var conversationID: UUID?
     var customTitle: String?
 
@@ -35,6 +36,7 @@ final class SidebarNode: Identifiable, @MainActor Codable {
         case _isExpanded = "isExpanded"
         case _lastActiveAt = "lastActiveAt"
         case _iconSymbol = "iconSymbol"
+        case _iconColor = "iconColor"
         case _conversationID = "conversationID"
         case _customTitle = "customTitle"
     }
@@ -64,6 +66,7 @@ final class SidebarNode: Identifiable, @MainActor Codable {
     func duplicated() -> SidebarNode {
         let copy = SidebarNode(kind: kind, title: title, url: url, children: children.map { $0.duplicated() }, isExpanded: isExpanded)
         copy.iconSymbol = iconSymbol
+        copy.iconColor = iconColor
         copy.customTitle = customTitle
         return copy
     }

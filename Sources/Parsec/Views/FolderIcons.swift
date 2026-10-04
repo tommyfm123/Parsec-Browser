@@ -6,12 +6,18 @@ struct FolderIconView: View {
     var size: CGFloat = 16
     var weight = Font.Weight.medium
     var isFilled = false
+    var tint: Color? = nil
+
+    private var iconTint: Color {
+        if let tint { return tint }
+        return isFilled ? SwatchPalette.defaultIcon.color : Color.primary
+    }
 
     var body: some View {
         Image(systemName: symbolName ?? (isFilled ? "folder.fill" : "folder"))
             .font(.system(size: size, weight: weight))
             .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(isFilled ? Color.blue : Color.primary)
+            .foregroundStyle(iconTint)
             .frame(width: size + 4, height: size + 2)
             .accessibilityHidden(true)
     }
@@ -31,6 +37,8 @@ struct SymbolPicker: View {
     let title: String
     let selectedSymbol: String?
     let preview: AnyView
+    var selectedColor: ThemeColor? = nil
+    var onColorSelect: ((ThemeColor?) -> Void)? = nil
     let onSelect: (String?) -> Void
 
     var body: some View {
@@ -49,6 +57,7 @@ struct SymbolPicker: View {
                     Button { onSelect(symbol) } label: {
                         Image(systemName: symbol)
                             .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(symbolTint)
                             .frame(width: 34, height: 34)
                             .background(RoundedRectangle(cornerRadius: Radius.row, style: .continuous).fill(Color.primary.opacity(selectedSymbol == symbol ? 0.14 : 0.04)))
                             .overlay(RoundedRectangle(cornerRadius: Radius.row, style: .continuous).strokeBorder(Color.accentColor.opacity(selectedSymbol == symbol ? 0.8 : 0), lineWidth: 1.5))
@@ -58,8 +67,18 @@ struct SymbolPicker: View {
                     .accessibilityLabel(symbol)
                 }
             }
+            if let onColorSelect {
+                Divider()
+                ColorPalettePicker(title: "Todos los iconos", selection: selectedColor ?? SwatchPalette.defaultIcon, onSelect: onColorSelect)
+            }
         }
         .padding(14)
+        .frame(width: onColorSelect == nil ? nil : 300)
+    }
+
+    private var symbolTint: Color {
+        guard onColorSelect != nil else { return .primary }
+        return selectedColor?.color ?? SwatchPalette.defaultIcon.color
     }
 }
 
@@ -71,12 +90,18 @@ struct FolderIconPicker: View {
         SymbolPicker(
             title: folder.title.isEmpty ? "Carpeta" : folder.title,
             selectedSymbol: folder.iconSymbol,
-            preview: AnyView(FolderIconView(symbolName: folder.iconSymbol, size: 22))
-        ) { symbol in
-            folder.iconSymbol = symbol
-            BrowserStore.shared.saveSoon()
-            onDone()
-        }
+            preview: AnyView(FolderIconView(symbolName: folder.iconSymbol, size: 22, isFilled: true, tint: BrowserStore.shared.settings.folderIconColor?.color)),
+            selectedColor: BrowserStore.shared.settings.folderIconColor,
+            onColorSelect: { color in
+                BrowserStore.shared.settings.folderIconColor = color
+                BrowserStore.shared.saveSoon()
+            },
+            onSelect: { symbol in
+                folder.iconSymbol = symbol
+                BrowserStore.shared.saveSoon()
+                onDone()
+            }
+        )
     }
 }
 

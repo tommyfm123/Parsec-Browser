@@ -41,16 +41,14 @@ enum ThemeColorSpace {
 }
 
 struct ArcThemeEditor: View {
-    private static let paletteHues: [ThemePoint] = [
-        ThemePoint(x: 0.08, y: 0.85), ThemePoint(x: 0.92, y: 0.45), ThemePoint(x: 0.8, y: 0.4), ThemePoint(x: 0.99, y: 0.25),
-        ThemePoint(x: 0.06, y: 0.25), ThemePoint(x: 0.13, y: 0.3), ThemePoint(x: 0.42, y: 0.3), ThemePoint(x: 0.55, y: 0.35),
-        ThemePoint(x: 0.66, y: 0.45), ThemePoint(x: 0.0, y: 1),
-    ]
-
     @Bindable var space: Space
 
     private var points: [ThemePoint] {
         space.theme.colors.map { ThemeColorSpace.point(for: $0, vibrancy: space.theme.vibrancy) }
+    }
+
+    private var workspaceSwatch: ThemeColor? {
+        space.theme.colors.count == 1 ? space.theme.colors[0] : nil
     }
 
     var body: some View {
@@ -67,26 +65,25 @@ struct ArcThemeEditor: View {
                 .padding(.bottom, 10)
             }
             .frame(height: 250)
-            HStack(spacing: 8) {
-                Button(action: applyPrism) {
-                    Circle()
-                        .fill(LinearGradient(colors: SpaceTheme.prism.colors.map(\.color), startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .overlay(Circle().strokeBorder(Color.primary.opacity(0.2)))
-                        .frame(width: 24, height: 24)
-                }
-                .buttonStyle(.plain)
-                .clickable()
-                .help("Prisma")
-                .accessibilityLabel("Tema Prisma")
-                ForEach(Self.paletteHues, id: \.self) { point in
-                    Button { applyPalette(point) } label: {
-                        Circle()
-                            .fill(ThemeColorSpace.color(at: point, theme: space.theme).color)
-                            .overlay(Circle().strokeBorder(Color.primary.opacity(0.12)))
-                            .frame(width: 24, height: 24)
+            ThemeSection(title: "Color del workspace") {
+                VStack(alignment: .leading, spacing: 10) {
+                    ColorPalettePicker(selection: workspaceSwatch) { color in
+                        guard let color else { return }
+                        space.theme.colors = [color]
+                    }
+                    Button(action: applyPrism) {
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(LinearGradient(colors: SpaceTheme.prism.colors.map(\.color), startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .overlay(Circle().strokeBorder(Color.primary.opacity(0.2)))
+                                .frame(width: 22, height: 22)
+                            Text("Prisma").font(.system(size: 12)).foregroundStyle(.secondary)
+                        }
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Color predefinido")
+                    .clickable()
+                    .help("Degradado Prisma")
+                    .accessibilityLabel("Tema Prisma")
                 }
             }
             HStack(spacing: 18) {
@@ -133,9 +130,6 @@ struct ArcThemeEditor: View {
         ThemeColorSpace.recolor(&space.theme, points: Array(points.dropLast()))
     }
 
-    private func applyPalette(_ point: ThemePoint) {
-        ThemeColorSpace.recolor(&space.theme, points: [point])
-    }
 }
 
 struct ThemeColorField: View {
@@ -365,7 +359,7 @@ enum SpaceMenu {
                 space.title = title
                 store.saveSoon()
             },
-            .action("Editar color del tema…", symbol: "paintpalette") {
+            .action("Editar colores…", symbol: "paintpalette") {
                 model.switchToSpace(space)
                 model.isThemeEditorPresented = true
             },
