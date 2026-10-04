@@ -124,13 +124,13 @@ struct AgentDrivingOverlay: View {
                 }
                 .frame(maxWidth: 280, alignment: .leading)
                 Button("Detener", action: onStop)
-                    .buttonStyle(.glass)
+                    .liquidGlassButton()
                     .controlSize(.small)
             }
             .padding(.leading, 14)
             .padding(.trailing, 8)
             .padding(.vertical, 8)
-            .glassEffect(.regular, in: Capsule())
+            .liquidGlass(in: Capsule(), showsBorder: true)
             .padding(.bottom, 18)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
@@ -300,7 +300,7 @@ struct BlankPaneView: View {
                 .font(.system(size: 26, weight: .light))
                 .foregroundStyle(.secondary)
             Button("Elegir qué abrir", action: action)
-                .buttonStyle(.glass)
+                .liquidGlassButton()
                 .controlSize(.large)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -351,7 +351,7 @@ struct FindBarView: View {
         .padding(.leading, 12)
         .padding(.trailing, 4)
         .padding(.vertical, 4)
-        .glassEffect(.regular, in: Capsule())
+        .liquidGlass(in: Capsule(), showsBorder: true)
         .onAppear { isFocused = true }
     }
 

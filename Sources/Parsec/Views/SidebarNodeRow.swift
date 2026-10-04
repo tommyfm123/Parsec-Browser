@@ -344,7 +344,7 @@ struct FolderRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            FolderIconView(symbolName: node.iconSymbol, size: SidebarViewMetrics.folderIconSize, weight: .semibold, isFilled: true)
+            FolderIconView(symbolName: node.iconSymbol, size: SidebarViewMetrics.folderIconSize, weight: .semibold, isFilled: true, tint: BrowserStore.shared.settings.folderIconColor?.color)
             if model.renamingNodeID == node.id {
                 InlineRenameField(initialText: node.title, font: .system(size: SidebarViewMetrics.folderTitleSize, weight: .semibold)) { model.finishRenaming(node, with: $0) }
             } else {
@@ -459,7 +459,7 @@ enum FolderMenu {
             },
             .action("Convertir “\(folderName)” en Space", symbol: "square.stack", isEnabled: !model.isPrivate) { model.turnFolderIntoSpace(node) },
             .divider,
-            .action("Cambiar icono…", symbol: "face.smiling") { model.folderIconEditingID = node.id },
+            .action("Icono y color…", symbol: "paintpalette") { model.folderIconEditingID = node.id },
             .action("Renombrar", symbol: "pencil") { model.renamingNodeID = node.id },
             .action("Duplicar", symbol: "plus.square.on.square") { model.duplicateFolder(node) },
             .submenu("Mover a", symbol: "arrow.right.square", entries: model.spaces.filter { $0.id != model.currentSpace.id }.map { space in
@@ -509,15 +509,14 @@ enum FolderRemoval {
 @MainActor
 enum SidebarDrop {
     @discardableResult
-    static func handleFavorite(_ items: [String], model: WindowModel, location: CGPoint, pageIndex: Int, availableWidth: CGFloat, columnCount: Int) -> Bool {
+    static func handleFavorite(_ items: [String], model: WindowModel, location: CGPoint, pageIndex: Int, availableWidth: CGFloat) -> Bool {
         guard let payload = items.first else { return false }
         let container = NodeContainer.favorites(profileID: model.currentSpace.profileID)
         let sourceID = UUID(uuidString: payload)
         let sourceIndex = model.favorites.firstIndex { $0.id == sourceID }
-        let pageSize = columnCount * SidebarViewMetrics.favoriteMaximumRows
-        let slot = min(SidebarViewMetrics.favoriteSlot(at: location, availableWidth: availableWidth, columnCount: columnCount), pageSize - 1)
+        let slot = SidebarViewMetrics.favoriteSlot(at: location, availableWidth: availableWidth)
         let lastIndex = max(model.favorites.count - (sourceIndex == nil ? 0 : 1), 0)
-        let targetIndex = min(pageIndex * pageSize + slot, lastIndex)
+        let targetIndex = min(pageIndex * SidebarViewMetrics.favoritesPerPage + slot, lastIndex)
         let insertionIndex = sourceIndex.map { SidebarViewMetrics.favoriteDropIndex(sourceIndex: $0, targetIndex: targetIndex) } ?? targetIndex
         return handle(items, model: model, container: container, index: insertionIndex)
     }

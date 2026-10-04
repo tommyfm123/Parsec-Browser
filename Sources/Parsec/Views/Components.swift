@@ -170,17 +170,75 @@ extension EnvironmentValues {
     }
 }
 
+@MainActor
+enum FaviconTone {
+    private static let sampleSide = 16
+    private static let grayscaleSaturationLimit = 0.1
+    private static let glyphCoverageLimit = 0.7
+    private static let darkLuminanceLimit = 0.3
+    private static let lightLuminanceLimit = 0.82
+    private static let unmeasurable = -1.0
+    private static let cache = NSMapTable<NSImage, NSNumber>.weakToStrongObjects()
+
+    static func needsInversion(_ image: NSImage, colorScheme: ColorScheme) -> Bool {
+        let luminance = glyphLuminance(of: image)
+        guard luminance != unmeasurable else { return false }
+        return colorScheme == .dark ? luminance < darkLuminanceLimit : luminance > lightLuminanceLimit
+    }
+
+    private static func glyphLuminance(of image: NSImage) -> Double {
+        if let cached = cache.object(forKey: image) { return cached.doubleValue }
+        let luminance = measureGlyphLuminance(image)
+        cache.setObject(NSNumber(value: luminance), forKey: image)
+        return luminance
+    }
+
+    private static func measureGlyphLuminance(_ image: NSImage) -> Double {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return unmeasurable }
+        let pixelCount = sampleSide * sampleSide
+        var pixels = [UInt8](repeating: 0, count: pixelCount * 4)
+        let isDrawn = pixels.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(
+                data: buffer.baseAddress, width: sampleSide, height: sampleSide, bitsPerComponent: 8, bytesPerRow: sampleSide * 4,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: sampleSide, height: sampleSide))
+            return true
+        }
+        guard isDrawn else { return unmeasurable }
+        var coverage = 0.0
+        var saturation = 0.0
+        var luminance = 0.0
+        for offset in stride(from: 0, to: pixels.count, by: 4) {
+            let red = Double(pixels[offset]) / 255
+            let green = Double(pixels[offset + 1]) / 255
+            let blue = Double(pixels[offset + 2]) / 255
+            coverage += Double(pixels[offset + 3]) / 255
+            saturation += max(red, green, blue) - min(red, green, blue)
+            luminance += 0.2126 * red + 0.7152 * green + 0.0722 * blue
+        }
+        let isGlyph = coverage > 0 && coverage / Double(pixelCount) < glyphCoverageLimit && saturation / coverage < grayscaleSaturationLimit
+        return isGlyph ? luminance / coverage : unmeasurable
+    }
+}
+
 struct FaviconView: View {
     let url: URL?
     var size: CGFloat = 16
     var isDimmed = false
     var allowsNetwork = true
     @Environment(\.allowsFaviconNetwork) private var environmentAllowsNetwork
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Group {
             if let icon = FaviconStore.shared.icon(for: url, allowsNetwork: allowsNetwork && environmentAllowsNetwork) {
-                Image(nsImage: icon).resizable().interpolation(.high)
+                let image = Image(nsImage: icon).resizable().interpolation(.high)
+                if FaviconTone.needsInversion(icon, colorScheme: colorScheme) {
+                    image.colorInvert()
+                } else {
+                    image
+                }
             } else if url == nil, let mark = BrandMark.image {
                 Image(nsImage: mark).resizable().renderingMode(.template).interpolation(.high).foregroundStyle(.primary)
             } else {
@@ -320,23 +378,118 @@ extension ButtonStyle where Self == SheetButtonStyle {
     static var sheetSecondary: SheetButtonStyle { SheetButtonStyle(kind: .secondary) }
 }
 
+@MainActor
+enum LiquidGlass {
+    private static let identityThreshold = 0.03
+    private static let clearGlassThreshold = 0.7
+    private static let maximumSolidOpacity = 0.92
+    private static let borderOpacity = 0.12
+
+    static var level: Double {
+        min(max(BrowserStore.shared.settings.liquidGlass, 0), 1)
+    }
+
+    static func material(level: Double, interactive: Bool, tint: Color?) -> Glass {
+        guard level >= identityThreshold else { return .identity }
+        let base: Glass = level >= clearGlassThreshold ? .clear : .regular
+        let tinted = tint.map { base.tint($0) } ?? base
+        return interactive ? tinted.interactive() : tinted
+    }
+
+    static func solidOpacity(level: Double) -> Double {
+        (1 - level) * maximumSolidOpacity
+    }
+
+    static func borderOpacity(level: Double) -> Double {
+        borderOpacity * (1 - level * 0.5)
+    }
+
+    static func solidFill(_ colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color(white: 0.26) : Color.white
+    }
+
+    static func activeFill(_ colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.white.opacity(0.14) : Color.white.opacity(0.7)
+    }
+}
+
+struct LiquidGlassModifier<GlassShape: InsettableShape>: ViewModifier {
+    let shape: GlassShape
+    var isActive = false
+    var interactive = false
+    var tint: Color? = nil
+    var showsBorder = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        let level = LiquidGlass.level
+        content
+            .background {
+                ZStack {
+                    shape.fill(LiquidGlass.solidFill(colorScheme)).opacity(LiquidGlass.solidOpacity(level: level))
+                    shape.fill(LiquidGlass.activeFill(colorScheme)).opacity(isActive ? 1 : 0)
+                    shape.strokeBorder(Color.primary.opacity(showsBorder ? LiquidGlass.borderOpacity(level: level) : 0), lineWidth: 0.75)
+                }
+                .animation(.easeOut(duration: 0.12), value: isActive)
+            }
+            .glassEffect(LiquidGlass.material(level: level, interactive: interactive, tint: tint), in: shape)
+    }
+}
+
+extension View {
+    func liquidGlass<GlassShape: InsettableShape>(in shape: GlassShape, isActive: Bool = false, interactive: Bool = false, tint: Color? = nil, showsBorder: Bool = false) -> some View {
+        modifier(LiquidGlassModifier(shape: shape, isActive: isActive, interactive: interactive, tint: tint, showsBorder: showsBorder))
+    }
+
+    func liquidGlassButton(prominent: Bool = false) -> some View {
+        modifier(LiquidGlassButtonModifier(prominent: prominent))
+    }
+}
+
+private struct LiquidGlassButtonModifier: ViewModifier {
+    var prominent = false
+
+    func body(content: Content) -> some View {
+        let level = LiquidGlass.level
+        if level < 0.08 {
+            solidStyle(content)
+        } else if prominent {
+            content.buttonStyle(.glass(LiquidGlass.material(level: level, interactive: true, tint: Color.accentColor.opacity(0.3 + 0.35 * level))))
+        } else {
+            content.buttonStyle(.glass(LiquidGlass.material(level: level, interactive: true, tint: nil)))
+        }
+    }
+
+    @ViewBuilder
+    private func solidStyle(_ content: Content) -> some View {
+        if prominent {
+            content.buttonStyle(.borderedProminent)
+        } else {
+            content.buttonStyle(.bordered)
+        }
+    }
+}
+
 struct IconButton: View {
     let symbolName: String
     let label: String
     var isEnabled = true
     let action: () -> Void
+    @ViewState private var isHovering = false
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbolName)
                 .font(.system(size: 13, weight: .medium))
                 .frame(width: 28, height: 28)
+                .liquidGlass(in: RoundedRectangle(cornerRadius: 8, style: .continuous), isActive: isHovering, interactive: true, showsBorder: true)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.35)
-        .hoverHighlight(cornerRadius: 7)
+        .onHover { isHovering = $0 }
+        .pointerStyle(.link)
         .help(label)
         .accessibilityLabel(label)
     }

@@ -58,7 +58,7 @@ struct CommandBarView: View {
             }
         }
         .frame(width: LayoutConstants.commandBarWidth)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
+        .liquidGlass(in: RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Self.radius, style: .continuous).strokeBorder(Color.primary.opacity(0.1), lineWidth: 1))
         .overlay(RoundedRectangle(cornerRadius: Self.radius, style: .continuous).strokeBorder(LinearGradient(colors: [Color.white.opacity(0.14), .clear], startPoint: .top, endPoint: .center), lineWidth: 1))
         .shadow(color: .black.opacity(0.3), radius: 50, y: 20)

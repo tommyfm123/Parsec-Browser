@@ -903,10 +903,10 @@ struct OllamaInstallRow: View {
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 6) {
                 Button("Descargar Ollama") { NSWorkspace.shared.open(LocalModels.downloadURL) }
-                    .buttonStyle(.glassProminent)
+                    .liquidGlassButton(prominent: true)
                     .clickable()
                 Button("Ya lo abrí") { Task { await LocalModels.shared.refresh() } }
-                    .buttonStyle(.glass)
+                    .liquidGlassButton()
                     .clickable()
             }
             .controlSize(.small)

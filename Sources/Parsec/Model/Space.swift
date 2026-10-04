@@ -19,7 +19,13 @@ struct ThemeColor: Codable, Hashable {
         self.init(red: resolved.redComponent, green: resolved.greenComponent, blue: resolved.blueComponent)
     }
 
+    private static let matchTolerance = 0.035
+
     var luminance: Double { 0.2126 * red + 0.7152 * green + 0.0722 * blue }
+
+    func matches(_ other: ThemeColor) -> Bool {
+        abs(red - other.red) < Self.matchTolerance && abs(green - other.green) < Self.matchTolerance && abs(blue - other.blue) < Self.matchTolerance
+    }
 }
 
 enum SpaceAppearance: String, Codable, CaseIterable {
@@ -42,6 +48,7 @@ struct SpaceTheme: Codable, Hashable {
     var transparency: Double
     var appearance = SpaceAppearance.auto
     var vibrancy = 0.6
+    var sidebarColor: ThemeColor? = nil
 
     init(colors: [ThemeColor], grain: Double, transparency: Double) {
         self.colors = colors
@@ -56,16 +63,12 @@ struct SpaceTheme: Codable, Hashable {
         transparency = try container.decode(Double.self, forKey: .transparency)
         appearance = try container.decodeIfPresent(SpaceAppearance.self, forKey: .appearance) ?? .auto
         vibrancy = try container.decodeIfPresent(Double.self, forKey: .vibrancy) ?? 0.6
+        sidebarColor = try container.decodeIfPresent(ThemeColor.self, forKey: .sidebarColor)
     }
 
     var isDark: Bool {
-        switch appearance {
-        case .light: return false
-        case .dark: return true
-        case .auto:
-            let averageLuminance = colors.map(\.luminance).reduce(0, +) / Double(max(colors.count, 1))
-            return averageLuminance < 0.5
-        }
+        let averageLuminance = colors.map(\.luminance).reduce(0, +) / Double(max(colors.count, 1))
+        return averageLuminance < 0.55
     }
 }
 
@@ -207,6 +210,9 @@ struct BrowserSettings: Codable {
     var linkPreviewDelayMilliseconds = 700
     var linkPreviewSize = LinkPreviewSize.medium
     var hidesGoogleOneTap = true
+    var customColors: [ThemeColor] = []
+    var liquidGlass = 1.0
+    var folderIconColor: ThemeColor? = nil
 
     init() {}
 
@@ -270,6 +276,9 @@ struct BrowserSettings: Codable {
         linkPreviewDelayMilliseconds = try container.decodeIfPresent(Int.self, forKey: .linkPreviewDelayMilliseconds) ?? defaults.linkPreviewDelayMilliseconds
         linkPreviewSize = try container.decodeIfPresent(LinkPreviewSize.self, forKey: .linkPreviewSize) ?? defaults.linkPreviewSize
         hidesGoogleOneTap = try container.decodeIfPresent(Bool.self, forKey: .hidesGoogleOneTap) ?? defaults.hidesGoogleOneTap
+        customColors = try container.decodeIfPresent([ThemeColor].self, forKey: .customColors) ?? []
+        liquidGlass = try container.decodeIfPresent(Double.self, forKey: .liquidGlass) ?? defaults.liquidGlass
+        folderIconColor = try container.decodeIfPresent(ThemeColor.self, forKey: .folderIconColor)
     }
 }
 

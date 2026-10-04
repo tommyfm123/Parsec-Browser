@@ -219,9 +219,8 @@ struct TopBarPill<Label: View>: View {
         HStack(spacing: 6) { label }
             .padding(.horizontal, 10)
             .frame(height: 32)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(isActive ? 0.1 : 0)))
+            .liquidGlass(in: RoundedRectangle(cornerRadius: 8, style: .continuous), isActive: isActive, interactive: true, showsBorder: true)
             .contentShape(Rectangle())
-            .hoverHighlight(cornerRadius: 8)
     }
 }
 
@@ -241,7 +240,7 @@ struct TopFolderMenu: View {
             }
         } label: {
             TopBarPill(isActive: containsSelection) {
-                FolderIconView(symbolName: folder.iconSymbol, size: 14)
+                FolderIconView(symbolName: folder.iconSymbol, size: 14, tint: BrowserStore.shared.settings.folderIconColor?.color)
                 if showsTitle {
                     Text(folder.title).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
                 }
@@ -419,7 +418,7 @@ struct OverlayLayer: View {
                         .font(.system(size: 13, weight: .medium))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 9)
-                        .glassEffect(.regular, in: Capsule())
+                        .liquidGlass(in: Capsule(), showsBorder: true)
                         .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .padding(.bottom, 24)
@@ -455,11 +454,11 @@ struct PromptCard: View {
             if let tertiaryTitle, let onTertiary {
                 Button(tertiaryTitle, action: onTertiary).buttonStyle(.borderless)
             }
-            Button(secondaryTitle, action: onSecondary).buttonStyle(.bordered)
-            Button(primaryTitle, action: onPrimary).buttonStyle(.borderedProminent)
+            Button(secondaryTitle, action: onSecondary).liquidGlassButton()
+            Button(primaryTitle, action: onPrimary).liquidGlassButton(prominent: true)
         }
         .padding(14)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .liquidGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous), showsBorder: true)
         .shadow(color: .black.opacity(0.18), radius: 18, y: 6)
         .transition(.move(edge: .top).combined(with: .opacity))
     }
@@ -483,7 +482,7 @@ struct CredentialChooser: View {
         }
         .padding(14)
         .frame(width: 280)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .liquidGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous), showsBorder: true)
         .shadow(color: .black.opacity(0.18), radius: 18, y: 6)
     }
 }

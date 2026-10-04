@@ -98,17 +98,13 @@ struct SidebarCircleButton: View {
     var isEnabled = true
     let action: () -> Void
     @ViewState private var isHovering = false
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbolName)
                 .font(.system(size: 13, weight: .medium))
                 .frame(width: SidebarView.headerHeight, height: SidebarView.headerHeight)
-                .background {
-                    Circle().fill(SidebarPalette.glassFill(colorScheme, isActive: isHovering))
-                }
-                .overlay(Circle().strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.75))
+                .liquidGlass(in: Circle(), isActive: isHovering, interactive: true, showsBorder: true)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -159,7 +155,6 @@ struct AddressBar: View {
     var height: CGFloat = 32
     var alwaysShowsFullURL = false
     @ViewState private var isHovering = false
-    @Environment(\.colorScheme) private var colorScheme
 
     private var displayText: String {
         guard let page = model.activePage, let url = page.currentURL else { return "Nueva pestaña" }
@@ -190,10 +185,7 @@ struct AddressBar: View {
         }
         .padding(.horizontal, 10)
         .frame(height: height)
-        .background(
-            RoundedRectangle(cornerRadius: height / 2, style: .continuous)
-                .fill(SidebarPalette.controlFill(colorScheme, isActive: isHovering))
-        )
+        .liquidGlass(in: Capsule(), isActive: isHovering, interactive: true, showsBorder: true)
         .contentShape(Rectangle())
         .clickable()
         .onTapGesture { model.presentCommandBar(mode: .navigateCurrent) }
@@ -215,10 +207,6 @@ enum SidebarPalette {
         colorScheme == .dark ? Color.white.opacity(isActive ? 0.12 : 0.07) : Color.black.opacity(isActive ? 0.08 : 0.05)
     }
 
-    static func selectedTileFill(_ colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color.white.opacity(0.12) : Color.white.opacity(0.85)
-    }
-
     static func rowFill(_ colorScheme: ColorScheme, isSelected: Bool, isHovering: Bool) -> Color {
         let darkOpacity = isSelected ? 0.16 : isHovering ? 0.07 : 0
         let lightOpacity = isSelected ? 0.82 : isHovering ? 0.35 : 0
@@ -228,7 +216,6 @@ enum SidebarPalette {
 
 struct FavoritesGrid: View {
     private static let spacing = SidebarViewMetrics.favoriteSpacing
-    private static let tileHeight = SidebarViewMetrics.favoriteTileHeight
     private static let pageEdgeWidth: CGFloat = 18
     private static let pageAnimationDuration = 0.14
 
@@ -247,31 +234,29 @@ struct FavoritesGrid: View {
         return previewIDs.compactMap { nodes[$0] }
     }
 
-    private var columnCount: Int {
-        let innerWidth = model.sidebarWidth - SidebarView.horizontalPadding * 2
-        return SidebarViewMetrics.favoriteColumnCount(availableWidth: innerWidth, favoriteCount: model.favorites.count)
-    }
-
-    private var pageSize: Int { columnCount * SidebarViewMetrics.favoriteMaximumRows }
+    private var pageSize: Int { SidebarViewMetrics.favoritesPerPage }
     private var pageCount: Int { max((model.favorites.count + pageSize - 1) / pageSize, 1) }
     private var pageAnimation: Animation { .easeOut(duration: reduceMotion ? 0 : Self.pageAnimationDuration) }
 
     private var pagedHeight: CGFloat {
-        let rows = CGFloat((min(model.favorites.count, pageSize) + columnCount - 1) / columnCount)
-        return max(rows * Self.tileHeight + max(rows - 1, 0) * Self.spacing, Self.tileHeight)
+        let columns = SidebarViewMetrics.favoriteColumns
+        let tileHeight = SidebarViewMetrics.favoriteTileHeight
+        let rows = CGFloat((min(model.favorites.count, pageSize) + columns - 1) / columns)
+        return max(rows * tileHeight + max(rows - 1, 0) * Self.spacing, tileHeight)
     }
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
             GeometryReader { geometry in
                 let width = geometry.size.width
-                let columnWidth = SidebarViewMetrics.favoriteColumnWidth(availableWidth: width, columnCount: columnCount)
-                ZStack(alignment: .topLeading) {
-                    ForEach(Array(displayedFavorites.enumerated()), id: \.element.id) { index, node in
-                        FavoriteTile(model: model, node: node, isDragging: draggedFavoriteID == node.id) { draggedFavoriteID = node.id }
-                            .frame(width: columnWidth - Self.spacing)
-                            .offset(x: CGFloat(index / pageSize) * width + CGFloat(index % columnCount) * columnWidth, y: CGFloat((index % pageSize) / columnCount) * (Self.tileHeight + Self.spacing))
-                            .allowsHitTesting(index / pageSize == pageIndex)
+                GlassEffectContainer(spacing: 0) {
+                    ZStack(alignment: .topLeading) {
+                        ForEach(Array(displayedFavorites.enumerated()), id: \.element.id) { index, node in
+                            FavoriteTile(model: model, node: node, isDragging: draggedFavoriteID == node.id) { draggedFavoriteID = node.id }
+                                .frame(width: SidebarViewMetrics.favoriteTileWidth(availableWidth: width), height: SidebarViewMetrics.favoriteTileHeight)
+                                .offset(tileOffset(index: index, width: width))
+                                .allowsHitTesting(index / pageSize == pageIndex)
+                        }
                     }
                 }
                 .frame(width: width * CGFloat(pageCount), height: pagedHeight, alignment: .topLeading)
@@ -283,7 +268,7 @@ struct FavoritesGrid: View {
                 .contentShape(Rectangle())
                 .background(SwipeMonitor(onChange: { trackSwipe($0, width: width) }, onEnd: { finishSwipe($0, width: width) }))
                 .dropDestination(for: String.self) { items, session in
-                    SidebarDrop.handleFavorite(items, model: model, location: session.location, pageIndex: pageIndex, availableWidth: width, columnCount: columnCount)
+                    SidebarDrop.handleFavorite(items, model: model, location: session.location, pageIndex: pageIndex, availableWidth: width)
                     finishDrag()
                 }
                 .dropConfiguration { _ in DropConfiguration(operation: .move) }
@@ -328,10 +313,15 @@ struct FavoritesGrid: View {
         }
     }
 
+    private func tileOffset(index: Int, width: CGFloat) -> CGSize {
+        let position = SidebarViewMetrics.favoritePosition(index: index, availableWidth: width)
+        return CGSize(width: position.x, height: position.y)
+    }
+
     private func previewDrop(at location: CGPoint, width: CGFloat) {
         guard let sourceID = draggedFavoriteID, model.favorites.contains(where: { $0.id == sourceID }) else { return }
-        let slot = SidebarViewMetrics.favoriteSlot(at: location, availableWidth: width, columnCount: columnCount)
-        let targetIndex = pageIndex * pageSize + min(slot, pageSize - 1)
+        let slot = SidebarViewMetrics.favoriteSlot(at: location, availableWidth: width)
+        let targetIndex = pageIndex * pageSize + slot
         let ids = previewIDs.isEmpty ? model.favorites.map(\.id) : previewIDs
         let reordered = SidebarViewMetrics.favoriteOrder(ids, moving: sourceID, to: targetIndex)
         guard reordered != previewIDs else { return }
@@ -405,22 +395,16 @@ struct FavoriteTile: View {
     var isDragging = false
     let beginDrag: () -> Void
     @ViewState private var isHovering = false
-    @Environment(\.colorScheme) private var colorScheme
 
     private var isSelected: Bool { model.currentSpace.selectedNodeID == node.id }
 
     var body: some View {
-        FaviconView(url: node.liveURL ?? node.children.first?.liveURL, size: 16, allowsNetwork: node.allowsFaviconNetwork)
-            .frame(maxWidth: .infinity)
-            .frame(height: SidebarViewMetrics.favoriteTileHeight)
-            .background(
-                RoundedRectangle(cornerRadius: SidebarPalette.rowCornerRadius, style: .continuous)
-                    .fill(isSelected ? SidebarPalette.selectedTileFill(colorScheme) : SidebarPalette.controlFill(colorScheme, isActive: isHovering))
-                    .shadow(color: .black.opacity(isSelected ? 0.1 : 0), radius: 3, y: 1)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: SidebarPalette.rowCornerRadius, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(isSelected ? 0.1 : 0.04), lineWidth: 0.75)
+        FaviconView(url: node.liveURL ?? node.children.first?.liveURL, size: SidebarViewMetrics.favoriteIconSize, allowsNetwork: node.allowsFaviconNetwork)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .liquidGlass(
+                in: RoundedRectangle(cornerRadius: SidebarViewMetrics.favoriteCornerRadius, style: .continuous),
+                isActive: isSelected || isHovering,
+                interactive: true
             )
             .contentShape(Rectangle())
             .clickable()
@@ -441,7 +425,6 @@ struct FavoriteTile: View {
 struct SidebarFooter: View {
     @Bindable var model: WindowModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 8) {
@@ -460,8 +443,7 @@ struct SidebarFooter: View {
             .scrollIndicators(.never)
             .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
             .frame(width: min(CGFloat(model.spaces.count) * 14 + 16, 120), height: 24)
-            .background(Capsule().fill(SidebarPalette.glassFill(colorScheme, isActive: false)))
-            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.75))
+            .liquidGlass(in: Capsule(), showsBorder: true)
             .popover(isPresented: $model.isThemeEditorPresented, arrowEdge: .top) { ArcThemeEditor(space: model.currentSpace).matchingPopoverAppearance() }
             .popover(isPresented: Binding(get: { model.spaceIconEditingID != nil }, set: { if !$0 { model.spaceIconEditingID = nil } }), arrowEdge: .top) {
                 SpaceIconPicker(space: model.currentSpace) { model.spaceIconEditingID = nil }
@@ -480,7 +462,6 @@ struct SidebarFooter: View {
 
 struct SidebarProfileMenu: View {
     @Bindable var model: WindowModel
-    @Environment(\.colorScheme) private var colorScheme
 
     private var profile: Profile? { model.store.profile(for: model.currentSpace) }
 
@@ -490,8 +471,7 @@ struct SidebarProfileMenu: View {
                 .font(.system(size: 20, weight: .regular))
                 .symbolRenderingMode(.hierarchical)
                 .frame(width: SidebarView.headerHeight, height: SidebarView.headerHeight)
-                .background(Circle().fill(SidebarPalette.glassFill(colorScheme, isActive: false)))
-                .overlay(Circle().strokeBorder(Color.primary.opacity(0.16), lineWidth: 0.75))
+                .liquidGlass(in: Circle(), interactive: true, showsBorder: true)
                 .contentShape(Circle())
         }
         .help(profile?.name ?? "Perfil")
