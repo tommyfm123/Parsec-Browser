@@ -85,31 +85,36 @@ enum SidebarViewMetrics {
     static let folderRowHeight: CGFloat = 32
     static let folderIconSize: CGFloat = 15
     static let folderTitleSize: CGFloat = 13
-    static let favoriteSpacing: CGFloat = 6
-    static let favoriteTileHeight: CGFloat = 38
-    static let favoriteMaximumRows = 3
-    static let preferredFavoriteTileWidth: CGFloat = 52
-    static let minimumFavoriteColumns = 3
-
-    static func favoriteColumnCount(availableWidth: CGFloat, favoriteCount: Int) -> Int {
-        let fittedColumns = Int((max(availableWidth, 0) + favoriteSpacing) / (preferredFavoriteTileWidth + favoriteSpacing))
-        return min(max(favoriteCount, 1), max(minimumFavoriteColumns, fittedColumns))
-    }
+    static let favoriteSpacing: CGFloat = 9
+    static let favoriteCornerRadius: CGFloat = 12
+    static let favoriteIconSize: CGFloat = 18
+    static let favoriteTileHeight: CGFloat = 46
+    static let favoriteColumns = 3
+    static let favoritesPerPage = 9
+    static let favoriteRows = favoritesPerPage / favoriteColumns
 
     static func favoriteDropIndex(sourceIndex: Int, targetIndex: Int) -> Int {
         sourceIndex < targetIndex ? targetIndex + 1 : targetIndex
     }
 
-    static func favoriteColumnWidth(availableWidth: CGFloat, columnCount: Int) -> CGFloat {
-        let evenPixelStep: CGFloat = 2
-        return ((availableWidth + favoriteSpacing) / CGFloat(columnCount) / evenPixelStep).rounded(.down) * evenPixelStep
+    static func favoriteTileWidth(availableWidth: CGFloat) -> CGFloat {
+        let tilesWidth = availableWidth - favoriteSpacing * CGFloat(favoriteColumns - 1)
+        return max(tilesWidth / CGFloat(favoriteColumns), 0)
     }
 
-    static func favoriteSlot(at location: CGPoint, availableWidth: CGFloat, columnCount: Int) -> Int {
-        let columnWidth = favoriteColumnWidth(availableWidth: availableWidth, columnCount: columnCount)
-        let column = min(max(Int(location.x / columnWidth), 0), columnCount - 1)
-        let row = max(Int(location.y / (favoriteTileHeight + favoriteSpacing)), 0)
-        return row * columnCount + column
+    static func favoritePosition(index: Int, availableWidth: CGFloat) -> CGPoint {
+        let columnPitch = favoriteTileWidth(availableWidth: availableWidth) + favoriteSpacing
+        let page = index / favoritesPerPage
+        let slot = index % favoritesPerPage
+        let x = CGFloat(page) * availableWidth + CGFloat(slot % favoriteColumns) * columnPitch
+        return CGPoint(x: x, y: CGFloat(slot / favoriteColumns) * (favoriteTileHeight + favoriteSpacing))
+    }
+
+    static func favoriteSlot(at location: CGPoint, availableWidth: CGFloat) -> Int {
+        let columnPitch = favoriteTileWidth(availableWidth: availableWidth) + favoriteSpacing
+        let column = min(max(Int(location.x / columnPitch), 0), favoriteColumns - 1)
+        let row = min(max(Int(location.y / (favoriteTileHeight + favoriteSpacing)), 0), favoriteRows - 1)
+        return row * favoriteColumns + column
     }
 
     static func favoriteOrder(_ ids: [UUID], moving sourceID: UUID, to targetIndex: Int) -> [UUID] {
