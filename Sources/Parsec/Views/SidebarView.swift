@@ -255,6 +255,7 @@ struct FavoritesGrid: View {
                             FavoriteTile(model: model, node: node, isDragging: draggedFavoriteID == node.id) { draggedFavoriteID = node.id }
                                 .frame(width: SidebarViewMetrics.favoriteTileWidth(availableWidth: width), height: SidebarViewMetrics.favoriteTileHeight)
                                 .offset(tileOffset(index: index, width: width))
+                                .opacity(isTileVisible(index: index) ? 1 : 0)
                                 .allowsHitTesting(index / pageSize == pageIndex)
                         }
                     }
@@ -311,6 +312,10 @@ struct FavoritesGrid: View {
         .onChange(of: pageCount) { _, count in
             pageIndex = min(pageIndex, count - 1)
         }
+    }
+
+    private func isTileVisible(index: Int) -> Bool {
+        index / pageSize == pageIndex || dragOffset != 0
     }
 
     private func tileOffset(index: Int, width: CGFloat) -> CGSize {
