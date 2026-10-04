@@ -1,5 +1,6 @@
 import AppKit
 
+ColorfulWindowControls.enable()
 MainActor.assumeIsolated {
     let application = NSApplication.shared
     let appDelegate = AppDelegate()
