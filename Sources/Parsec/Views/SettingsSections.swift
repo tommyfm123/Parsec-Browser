@@ -402,6 +402,9 @@ struct AppearanceSettings: View {
     @ViewState private var selectedID = BrowserStore.shared.settings.appIconID
 
     var body: some View {
+        SettingsGroup(title: "Liquid Glass", footer: "A la izquierda los botones se ven más sólidos. A la derecha, más vidrio líquido. Vale para los botones de toda la app.") {
+            LiquidGlassSettings()
+        }
         SettingsGroup(title: "Ícono de la app", footer: "El ícono elegido se usa en el Dock y en el selector de apps, y se mantiene al reiniciar Parsec.") {
             LazyVGrid(columns: Self.columns, alignment: .leading, spacing: 14) {
                 ForEach(AppIconCatalog.options) { option in
@@ -417,6 +420,64 @@ struct AppearanceSettings: View {
         BrowserStore.shared.settings.appIconID = option.id
         BrowserStore.shared.saveSoon()
         AppIconCatalog.applySelected()
+    }
+}
+
+struct LiquidGlassSettings: View {
+    private var level: Binding<Double> { SettingsBinding.make(\.liquidGlass) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ZStack {
+                MeshGradient(width: 3, height: 3, points: [
+                    [0, 0], [0.5, 0], [1, 0],
+                    [0, 0.5], [0.5, 0.5], [1, 0.5],
+                    [0, 1], [0.5, 1], [1, 1],
+                ], colors: [
+                    Color(red: 0.22, green: 0.48, blue: 0.28), Color(red: 0.48, green: 0.74, blue: 0.9), Color(red: 0.62, green: 0.8, blue: 0.92),
+                    Color(red: 0.18, green: 0.42, blue: 0.24), Color(red: 0.55, green: 0.7, blue: 0.42), Color(red: 0.78, green: 0.8, blue: 0.74),
+                    Color(red: 0.16, green: 0.28, blue: 0.18), Color(red: 0.42, green: 0.46, blue: 0.4), Color(red: 0.72, green: 0.7, blue: 0.62),
+                ])
+                HStack(spacing: 10) {
+                    previewSymbol("square.and.arrow.up")
+                    previewSymbol("ellipsis")
+                    previewSymbol("plus.square.on.square")
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                        Text("Buscar")
+                    }
+                    .font(.system(size: 13, weight: .medium))
+                    .padding(.horizontal, 14)
+                    .frame(height: 36)
+                    .liquidGlass(in: Capsule(), interactive: true, showsBorder: true)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 150)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            HStack(spacing: 10) {
+                Image(systemName: "square.on.square")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                Slider(value: level, in: 0...1)
+                    .accessibilityLabel("Liquid Glass")
+                    .accessibilityValue("\(Int((level.wrappedValue * 100).rounded())) por ciento")
+                Image(systemName: "camera.filters")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func previewSymbol(_ symbolName: String) -> some View {
+        Image(systemName: symbolName)
+            .font(.system(size: 15, weight: .medium))
+            .frame(width: 46, height: 36)
+            .liquidGlass(in: Capsule(), interactive: true, showsBorder: true)
+            .accessibilityHidden(true)
     }
 }
 

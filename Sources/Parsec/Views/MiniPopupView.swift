@@ -66,7 +66,7 @@ struct MiniPopupView: View {
             composer
         }
         .clipShape(cardShape)
-        .glassEffect(.regular, in: cardShape)
+        .liquidGlass(in: cardShape)
         .overlay(cardShape.strokeBorder(Color.primary.opacity(0.08)))
         .shadow(color: .black.opacity(0.16), radius: 22, y: 12)
     }

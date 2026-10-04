@@ -320,23 +320,118 @@ extension ButtonStyle where Self == SheetButtonStyle {
     static var sheetSecondary: SheetButtonStyle { SheetButtonStyle(kind: .secondary) }
 }
 
+@MainActor
+enum LiquidGlass {
+    private static let identityThreshold = 0.03
+    private static let clearGlassThreshold = 0.7
+    private static let maximumSolidOpacity = 0.92
+    private static let borderOpacity = 0.12
+
+    static var level: Double {
+        min(max(BrowserStore.shared.settings.liquidGlass, 0), 1)
+    }
+
+    static func material(level: Double, interactive: Bool, tint: Color?) -> Glass {
+        guard level >= identityThreshold else { return .identity }
+        let base: Glass = level >= clearGlassThreshold ? .clear : .regular
+        let tinted = tint.map { base.tint($0) } ?? base
+        return interactive ? tinted.interactive() : tinted
+    }
+
+    static func solidOpacity(level: Double) -> Double {
+        (1 - level) * maximumSolidOpacity
+    }
+
+    static func borderOpacity(level: Double) -> Double {
+        borderOpacity * (1 - level * 0.5)
+    }
+
+    static func solidFill(_ colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color(white: 0.26) : Color.white
+    }
+
+    static func activeFill(_ colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.white.opacity(0.14) : Color.white.opacity(0.7)
+    }
+}
+
+struct LiquidGlassModifier<GlassShape: InsettableShape>: ViewModifier {
+    let shape: GlassShape
+    var isActive = false
+    var interactive = false
+    var tint: Color? = nil
+    var showsBorder = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        let level = LiquidGlass.level
+        content
+            .background {
+                ZStack {
+                    shape.fill(LiquidGlass.solidFill(colorScheme)).opacity(LiquidGlass.solidOpacity(level: level))
+                    shape.fill(LiquidGlass.activeFill(colorScheme)).opacity(isActive ? 1 : 0)
+                    shape.strokeBorder(Color.primary.opacity(showsBorder ? LiquidGlass.borderOpacity(level: level) : 0), lineWidth: 0.75)
+                }
+                .animation(.easeOut(duration: 0.12), value: isActive)
+            }
+            .glassEffect(LiquidGlass.material(level: level, interactive: interactive, tint: tint), in: shape)
+    }
+}
+
+extension View {
+    func liquidGlass<GlassShape: InsettableShape>(in shape: GlassShape, isActive: Bool = false, interactive: Bool = false, tint: Color? = nil, showsBorder: Bool = false) -> some View {
+        modifier(LiquidGlassModifier(shape: shape, isActive: isActive, interactive: interactive, tint: tint, showsBorder: showsBorder))
+    }
+
+    func liquidGlassButton(prominent: Bool = false) -> some View {
+        modifier(LiquidGlassButtonModifier(prominent: prominent))
+    }
+}
+
+private struct LiquidGlassButtonModifier: ViewModifier {
+    var prominent = false
+
+    func body(content: Content) -> some View {
+        let level = LiquidGlass.level
+        if level < 0.08 {
+            solidStyle(content)
+        } else if prominent {
+            content.buttonStyle(.glass(LiquidGlass.material(level: level, interactive: true, tint: Color.accentColor.opacity(0.3 + 0.35 * level))))
+        } else {
+            content.buttonStyle(.glass(LiquidGlass.material(level: level, interactive: true, tint: nil)))
+        }
+    }
+
+    @ViewBuilder
+    private func solidStyle(_ content: Content) -> some View {
+        if prominent {
+            content.buttonStyle(.borderedProminent)
+        } else {
+            content.buttonStyle(.bordered)
+        }
+    }
+}
+
 struct IconButton: View {
     let symbolName: String
     let label: String
     var isEnabled = true
     let action: () -> Void
+    @ViewState private var isHovering = false
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbolName)
                 .font(.system(size: 13, weight: .medium))
                 .frame(width: 28, height: 28)
+                .liquidGlass(in: RoundedRectangle(cornerRadius: 8, style: .continuous), isActive: isHovering, interactive: true, showsBorder: true)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.35)
-        .hoverHighlight(cornerRadius: 7)
+        .onHover { isHovering = $0 }
+        .pointerStyle(.link)
         .help(label)
         .accessibilityLabel(label)
     }
