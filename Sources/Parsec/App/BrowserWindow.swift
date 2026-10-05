@@ -67,8 +67,14 @@ final class BrowserWindow: NSWindow, NSWindowDelegate {
         layoutTrafficLights()
     }
 
+    func windowDidEnterFullScreen(_ notification: Notification) {
+        layoutTrafficLights()
+        model.videoFullscreenWindowDidEnter()
+    }
+
     func windowDidExitFullScreen(_ notification: Notification) {
         layoutTrafficLights()
+        model.videoFullscreenWindowDidExit()
     }
 
     func windowDidMiniaturize(_ notification: Notification) {
@@ -84,6 +90,7 @@ final class BrowserWindow: NSWindow, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        model.prepareToClose()
         model.closePeek()
         if model.isPrivate {
             model.currentSpace.today.forEach(BrowserStore.shared.unloadPages)

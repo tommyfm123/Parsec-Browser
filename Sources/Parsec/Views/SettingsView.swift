@@ -7,16 +7,24 @@ struct LittleBrowserView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            LittleToolbar(model: model)
+            if !model.isVideoFullscreen {
+                LittleToolbar(model: model)
+            }
             ZStack(alignment: .top) {
-                WebViewHost(webView: model.page.webView, cornerRadius: Radius.card)
+                WebViewHost(webView: model.page.webView, cornerRadius: model.isVideoFullscreen ? 0 : Radius.card)
                 LoadingLineView(page: model.page)
             }
-            .shadow(color: .black.opacity(0.14), radius: 8, y: 2)
-            .padding(.horizontal, LittleWindowMetrics.contentInset)
-            .padding(.bottom, LittleWindowMetrics.contentInset)
+            .shadow(color: .black.opacity(model.isVideoFullscreen ? 0 : 0.14), radius: 8, y: 2)
+            .padding(.horizontal, model.isVideoFullscreen ? 0 : LittleWindowMetrics.contentInset)
+            .padding(.bottom, model.isVideoFullscreen ? 0 : LittleWindowMetrics.contentInset)
         }
-        .background(VisualEffectBackground(material: .sidebar))
+        .background {
+            if model.isVideoFullscreen {
+                Color.black
+            } else {
+                VisualEffectBackground(material: .sidebar)
+            }
+        }
         .ignoresSafeArea()
     }
 }

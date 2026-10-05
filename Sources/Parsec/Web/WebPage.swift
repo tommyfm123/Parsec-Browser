@@ -36,6 +36,7 @@ protocol WebPageHost: AnyObject {
     func suggestCredentialChoices(for page: WebPage)
     func presentingWindow() -> NSWindow?
     func linkPreviewDidChange(_ event: LinkPreviewEvent, from page: WebPage)
+    func setVideoFullscreen(_ isFullscreen: Bool, page: WebPage)
 }
 
 extension WebPageHost {
@@ -45,6 +46,7 @@ extension WebPageHost {
 extension WebPageHost {
     func suggestPasswordFill(for page: WebPage) {}
     func suggestCredentialChoices(for page: WebPage) {}
+    func setVideoFullscreen(_ isFullscreen: Bool, page: WebPage) {}
 }
 
 @MainActor
@@ -141,8 +143,14 @@ final class WebPage: NSObject {
         ContentBlocker.shared.install(on: webView.configuration.userContentController, includesBlocker: isBlockerApplied)
     }
 
+    func exitDocumentFullscreen() {
+        guard !isTornDown else { return }
+        webView.evaluateJavaScript("document.exitFullscreen()")
+    }
+
     func tearDown() {
         isTornDown = true
+        host?.setVideoFullscreen(false, page: self)
         loadTask?.cancel()
         navigationID = UUID()
         webView.stopLoading()
@@ -370,6 +378,7 @@ extension WebPage: WKNavigationDelegate {
             return .cancel
         }
         syncBlocker(for: url)
+        host?.setVideoFullscreen(false, page: self)
         return .allow
     }
 

@@ -74,12 +74,16 @@ final class WindowModel: WebPageHost {
     var activeAgentID: UUID?
     var pageConversations: [UUID: AssistantModel] = [:]
     var isHistoryPresented = false
+    var videoFullscreenNodeID: UUID?
     var linkPreview: LinkPreviewState?
     var newSpacePullProgress: CGFloat = 0
     @ObservationIgnored private var previousSelectionID: UUID?
     @ObservationIgnored private var pendingReveals: [RevealEdge: Task<Void, Never>] = [:]
     @ObservationIgnored private var linkPreviewShowTask: Task<Void, Never>?
     @ObservationIgnored private var linkPreviewDismissTask: Task<Void, Never>?
+    @ObservationIgnored private var fullscreenSession = VideoFullscreenWindowSession()
+    @ObservationIgnored private weak var videoFullscreenPage: WebPage?
+    @ObservationIgnored private var isClosing = false
 
     init(isPrivate: Bool = false) {
         self.isPrivate = isPrivate
@@ -145,8 +149,15 @@ final class WindowModel: WebPageHost {
         CGFloat(store.settings.sidebarWidth).rounded()
     }
 
+    var isVideoFullscreen: Bool { videoFullscreenNodeID != nil }
+
+    var videoFullscreenNode: SidebarNode? {
+        guard let videoFullscreenNodeID else { return nil }
+        return currentSpace.allNodes.find(videoFullscreenNodeID) ?? favorites.find(videoFullscreenNodeID)
+    }
+
     var isChromeVisible: Bool {
-        isSidebarPinned || isSidebarHovering
+        !isVideoFullscreen && (isSidebarPinned || isSidebarHovering)
     }
 
     var visibleNodeIDs: Set<UUID> {
@@ -165,6 +176,7 @@ final class WindowModel: WebPageHost {
 extension WindowModel {
     func select(_ node: SidebarNode) {
         guard !node.isFolder else { return }
+        if let videoFullscreenNodeID, !node.contains(nodeID: videoFullscreenNodeID) { finishVideoFullscreen() }
         if currentSpace.selectedNodeID != node.id {
             handOffPictureInPicture(from: selectedNode, to: node)
             dismissLinkPreview()
@@ -312,6 +324,7 @@ extension WindowModel {
     }
 
     func close(_ node: SidebarNode) {
+        if let videoFullscreenNodeID, node.contains(nodeID: videoFullscreenNodeID) { finishVideoFullscreen() }
         pageConversations[node.id]?.stop()
         pageConversations[node.id] = nil
         let isSelected = currentSpace.selectedNodeID == node.id
@@ -498,6 +511,10 @@ extension WindowModel {
     }
 
     func dismissTransientUI() -> Bool {
+        if videoFullscreenNodeID != nil {
+            finishVideoFullscreen()
+            return true
+        }
         if linkPreview != nil {
             dismissLinkPreview()
             return true
@@ -519,6 +536,64 @@ extension WindowModel {
             return true
         }
         return false
+    }
+
+    func prepareToClose() {
+        isClosing = true
+        finishVideoFullscreen()
+    }
+
+    func setVideoFullscreen(_ isFullscreen: Bool, page: WebPage) {
+        if isClosing { return }
+        if isFullscreen {
+            beginVideoFullscreen(page)
+            return
+        }
+        guard videoFullscreenPage === page else { return }
+        finishVideoFullscreen()
+    }
+
+    func videoFullscreenWindowDidEnter() {
+        fullscreenSession.windowDidEnter(window)
+    }
+
+    func videoFullscreenWindowDidExit() {
+        fullscreenSession.windowDidExit(window)
+        guard videoFullscreenNodeID != nil else { return }
+        let page = videoFullscreenPage
+        videoFullscreenNodeID = nil
+        videoFullscreenPage = nil
+        page?.exitDocumentFullscreen()
+    }
+
+    private func beginVideoFullscreen(_ page: WebPage) {
+        guard let nodeID = page.node?.id else {
+            page.exitDocumentFullscreen()
+            return
+        }
+        if videoFullscreenNodeID != nil {
+            if videoFullscreenPage !== page { page.exitDocumentFullscreen() }
+            return
+        }
+        guard selectedNode?.allTabs.contains(where: { $0.id == nodeID }) == true else {
+            page.exitDocumentFullscreen()
+            return
+        }
+        _ = dismissTransientUI()
+        isSidebarHovering = false
+        isAssistantHovering = false
+        videoFullscreenPage = page
+        videoFullscreenNodeID = nodeID
+        fullscreenSession.enter(window)
+    }
+
+    private func finishVideoFullscreen() {
+        guard videoFullscreenNodeID != nil else { return }
+        let page = videoFullscreenPage
+        videoFullscreenNodeID = nil
+        videoFullscreenPage = nil
+        if isClosing { fullscreenSession.cancel() } else { fullscreenSession.exit(window) }
+        page?.exitDocumentFullscreen()
     }
 
     func closePeek() {
