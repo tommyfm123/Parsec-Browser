@@ -21,6 +21,8 @@ final class AuditHost: WebPageHost {
     }
     func offerPasswordSave(host: String, username: String, password: String) {}
     func presentingWindow() -> NSWindow? { nil }
+    var fullscreenChanges: [Bool] = []
+    func setVideoFullscreen(_ isFullscreen: Bool, page: WebPage) { fullscreenChanges.append(isFullscreen) }
 }
 
 @MainActor
@@ -143,6 +145,42 @@ struct ParsecAudit {
         try expect(try await evaluate(metricsFixture, in: privatePage, arguments: ["host": "docs.google.com", "width": 0, "height": 0]) as? [Int] == [1024, 768], "Docs missing window metrics follow viewport resizing")
         try expect(try await evaluate(metricsFixture, in: privatePage, arguments: ["host": "docs.google.com", "width": 1280, "height": 900]) as? [Int] == [1280, 900], "Docs valid native window metrics remain intact")
         try expect(try await evaluate(metricsFixture, in: privatePage, arguments: ["host": "other.example", "width": 0, "height": 0]) as? [Int] == [0, 0], "Docs window metric workaround leaves other sites unchanged")
+        guard let fullscreenScript = controller.userScripts.first(where: { $0.source.contains(InWindowFullscreen.handlerName) }) else {
+            throw NSError(domain: "ParsecAudit", code: 1, userInfo: [NSLocalizedDescriptionKey: "in-window fullscreen script missing"])
+        }
+        try expect(!fullscreenScript.isForMainFrameOnly && fullscreenScript.injectionTime == .atDocumentStart, "video fullscreen installs before the page can open another window")
+        let fullscreenProbe = """
+        const installed = Element.prototype.requestFullscreen.toString().includes('hasGesture');
+        const player = document.createElement('div');
+        document.body.appendChild(player);
+        const originalActivation = Object.getOwnPropertyDescriptor(Navigator.prototype, 'userActivation');
+        const setActivation = isActive => Object.defineProperty(Navigator.prototype, 'userActivation', { configurable: true, get: () => ({ isActive, hasBeenActive: isActive }) });
+        let deniedWithoutGesture = false;
+        let entered = false;
+        let left = false;
+        try {
+            setActivation(false);
+            try { await player.requestFullscreen(); } catch (error) { deniedWithoutGesture = error.name === 'NotAllowedError'; }
+            setActivation(true);
+            await player.requestFullscreen();
+            entered = document.fullscreenElement === player && getComputedStyle(player).position === 'fixed';
+            await document.exitFullscreen();
+            left = document.fullscreenElement === null;
+        } finally {
+            if (originalActivation) Object.defineProperty(Navigator.prototype, 'userActivation', originalActivation);
+            else delete Navigator.prototype.userActivation;
+            player.remove();
+        }
+        return [installed, deniedWithoutGesture, entered, left].map(value => value ? 1 : 0);
+        """
+        guard let fullscreenFlags = try await evaluate(fullscreenProbe, in: privatePage, world: .page) as? [Int], fullscreenFlags.count == 4 else {
+            throw NSError(domain: "ParsecAudit", code: 1, userInfo: [NSLocalizedDescriptionKey: "fullscreen probe returned no result"])
+        }
+        try expect(fullscreenFlags[0] == 1, "video fullscreen replaces the separate WebKit window")
+        try expect(fullscreenFlags[1] == 1, "video fullscreen still requires a click")
+        try expect(fullscreenFlags[2] == 1 && fullscreenFlags[3] == 1, "video fullscreen fills the current page and then leaves it")
+        try expect(privatePage.webView.fullscreenState == .notInFullscreen, "video fullscreen does not open another window")
+        try await waitUntil { auditHost.fullscreenChanges.suffix(2).elementsEqual([true, false]) }
         controller.add(frameCapture, contentWorld: .defaultClient, name: "auditFrame")
         controller.addUserScript(WKUserScript(source: "window.webkit.messageHandlers.auditFrame.postMessage(window === top ? 'main' : 'child');", injectionTime: .atDocumentEnd, forMainFrameOnly: false, in: .defaultClient))
         _ = try await evaluate("window.webkit.messageHandlers.auditFrame.postMessage('main'); const frame = document.createElement('iframe'); frame.src = '/embedded'; document.body.appendChild(frame); return true;", in: privatePage)

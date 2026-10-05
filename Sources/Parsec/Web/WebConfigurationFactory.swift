@@ -102,6 +102,8 @@ enum WebConfigurationFactory {
         controller.addUserScript(linkPreviewScript)
         controller.add(LinkPreviewMessageRouter.shared, contentWorld: linkPreviewWorld, name: linkPreviewHandlerName)
         controller.addUserScript(AutoPictureInPicture.intentTrackingScript)
+        controller.addUserScript(InWindowFullscreen.userScript)
+        controller.add(InWindowFullscreenRouter.shared, contentWorld: .page, name: InWindowFullscreen.handlerName)
         ContentBlocker.shared.install(on: controller, includesBlocker: true)
         return controller
     }

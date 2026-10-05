@@ -8,7 +8,10 @@ import WebKit
 final class LittleWindowModel: WebPageHost {
     let node: SidebarNode
     let page: WebPage
+    var isVideoFullscreen = false
     @ObservationIgnored weak var window: NSWindow?
+    @ObservationIgnored private var fullscreenSession = VideoFullscreenWindowSession()
+    @ObservationIgnored private var isClosing = false
 
     init(url: URL?, profileID: UUID, configuration: WKWebViewConfiguration? = nil) {
         node = SidebarNode.tab(url: url)
@@ -25,6 +28,50 @@ final class LittleWindowModel: WebPageHost {
 
     func discard() {
         BrowserStore.shared.unloadPage(node)
+    }
+
+    func prepareToClose() {
+        isClosing = true
+        finishVideoFullscreen()
+    }
+
+    func setVideoFullscreen(_ isFullscreen: Bool, page: WebPage) {
+        guard !isClosing, page === self.page else { return }
+        if isFullscreen {
+            guard !isVideoFullscreen else { return }
+            isVideoFullscreen = true
+            updateTrafficLights()
+            fullscreenSession.enter(window)
+            return
+        }
+        finishVideoFullscreen()
+    }
+
+    func videoFullscreenWindowDidEnter() {
+        fullscreenSession.windowDidEnter(window)
+    }
+
+    func videoFullscreenWindowDidExit() {
+        fullscreenSession.windowDidExit(window)
+        guard isVideoFullscreen else { return }
+        isVideoFullscreen = false
+        updateTrafficLights()
+        page.exitDocumentFullscreen()
+    }
+
+    private func finishVideoFullscreen() {
+        guard isVideoFullscreen else { return }
+        isVideoFullscreen = false
+        updateTrafficLights()
+        if isClosing { fullscreenSession.cancel() } else { fullscreenSession.exit(window) }
+        page.exitDocumentFullscreen()
+    }
+
+    private func updateTrafficLights() {
+        NSWindow.trafficLightButtonTypes.forEach { buttonType in
+            window?.standardWindowButton(buttonType)?.isHidden = isVideoFullscreen
+        }
+        if !isVideoFullscreen { (window as? LittleWindow)?.layoutTrafficLights() }
     }
 
     func openNewTab(from page: WebPage, url: URL?, configuration: WKWebViewConfiguration?, inBackground: Bool) -> WKWebView? {
@@ -105,11 +152,21 @@ final class LittleWindow: NSWindow, NSWindowDelegate {
         layoutTrafficLights()
     }
 
+    func windowDidEnterFullScreen(_ notification: Notification) {
+        model.videoFullscreenWindowDidEnter()
+    }
+
+    func windowDidExitFullScreen(_ notification: Notification) {
+        layoutTrafficLights()
+        model.videoFullscreenWindowDidExit()
+    }
+
     func windowDidBecomeKey(_ notification: Notification) {
         layoutTrafficLights()
     }
 
     func windowWillClose(_ notification: Notification) {
+        model.prepareToClose()
         if !isPromoting { model.discard() }
         onClose?()
     }

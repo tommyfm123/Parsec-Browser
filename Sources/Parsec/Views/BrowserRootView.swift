@@ -9,17 +9,27 @@ struct BrowserRootView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            switch store.settings.layout {
-            case .sidebar: SidebarLayoutView(model: model)
-            case .topTabs: TopTabsLayoutView(model: model)
-            }
-            OverlayLayer(model: model)
-            if model.isWelcomePresented {
-                WelcomeView { model.finishWelcome() }
-                    .transition(.opacity)
+            if model.isVideoFullscreen {
+                VideoFullscreenContent(model: model)
+            } else {
+                switch store.settings.layout {
+                case .sidebar: SidebarLayoutView(model: model)
+                case .topTabs: TopTabsLayoutView(model: model)
+                }
+                OverlayLayer(model: model)
+                if model.isWelcomePresented {
+                    WelcomeView { model.finishWelcome() }
+                        .transition(.opacity)
+                }
             }
         }
-        .background(WindowBackgroundView(theme: model.currentSpace.theme))
+        .background {
+            if model.isVideoFullscreen {
+                Color.black
+            } else {
+                WindowBackgroundView(theme: model.currentSpace.theme)
+            }
+        }
         .ignoresSafeArea()
         .onChange(of: model.isChromeVisible, initial: true) { _, isVisible in
             (model.window as? BrowserWindow)?.setTrafficLightsVisible(isVisible)
@@ -32,6 +42,18 @@ struct BrowserRootView: View {
         }
         .sheet(isPresented: $model.isNewSpacePresented) {
             NewSpaceView(model: model)
+        }
+    }
+}
+
+struct VideoFullscreenContent: View {
+    @Bindable var model: WindowModel
+
+    var body: some View {
+        if let node = model.videoFullscreenNode {
+            PaneWebContent(model: model, node: node, cornerRadius: 0, roundsTopCorners: true)
+        } else {
+            Color.black
         }
     }
 }
