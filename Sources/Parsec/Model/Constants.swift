@@ -65,7 +65,6 @@ enum LayoutConstants {
     static let peekScale: CGFloat = 0.85
     static let littleWindowSize = CGSize(width: 900, height: 640)
     static let mainWindowSize = CGSize(width: 1400, height: 900)
-    static let rowCornerRadius: CGFloat = 8
     static let folderIndent: CGFloat = 14
     static let swipeCommitThreshold: CGFloat = 0.28
     static let newSpaceSwipeDeadZone: CGFloat = 0.44
@@ -82,13 +81,17 @@ enum LittleWindowMetrics {
 
 enum SidebarViewMetrics {
     static let outerInset: CGFloat = 8
-    static let folderRowHeight: CGFloat = 32
+    static let folderRowHeight: CGFloat = 38
     static let folderIconSize: CGFloat = 15
     static let folderTitleSize: CGFloat = 13
     static let favoriteSpacing: CGFloat = 9
-    static let favoriteCornerRadius: CGFloat = 12
-    static let favoriteIconSize: CGFloat = 18
-    static let favoriteTileHeight: CGFloat = 46
+    static let favoriteCornerRadius: CGFloat = 10
+    static let favoriteIconSize: CGFloat = 20
+    static let favoriteTileHeight: CGFloat = 45
+    static let favoriteSelectionBorderWidth: CGFloat = 2
+    static let rowSpacing: CGFloat = 3
+    static let rowIconSpacing: CGFloat = 10
+    static let spaceTitleHeight: CGFloat = 36
     static let favoriteColumns = 3
     static let favoritesPerPage = 9
     static let favoriteRows = favoritesPerPage / favoriteColumns

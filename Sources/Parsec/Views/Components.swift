@@ -187,12 +187,34 @@ enum FaviconTone {
     private static let darkLuminanceLimit = 0.3
     private static let lightLuminanceLimit = 0.82
     private static let unmeasurable = -1.0
+    private static let accentSaturationFloor = 0.3
+    private static let accentOpacityFloor = 0.5
+    private static let accentMinimumWeight = 3.0
+    private static let hueBucketCount = 12
     private static let cache = NSMapTable<NSImage, NSNumber>.weakToStrongObjects()
+    private static let accentCache = NSMapTable<NSImage, NSColor>.weakToStrongObjects()
+
+    private struct SampledPixel {
+        let red: Double
+        let green: Double
+        let blue: Double
+        let alpha: Double
+
+        var saturation: Double { max(red, green, blue) - min(red, green, blue) }
+        var luminance: Double { 0.2126 * red + 0.7152 * green + 0.0722 * blue }
+        var hue: Double { NSColor(srgbRed: red, green: green, blue: blue, alpha: 1).hueComponent }
+    }
 
     static func needsInversion(_ image: NSImage, colorScheme: ColorScheme) -> Bool {
         let luminance = glyphLuminance(of: image)
         guard luminance != unmeasurable else { return false }
         return colorScheme == .dark ? luminance < darkLuminanceLimit : luminance > lightLuminanceLimit
+    }
+
+    static func accentColor(of image: NSImage) -> Color? {
+        let accent = accentCache.object(forKey: image) ?? measureAccent(image)
+        accentCache.setObject(accent, forKey: image)
+        return accent.alphaComponent > 0 ? Color(nsColor: accent) : nil
     }
 
     private static func glyphLuminance(of image: NSImage) -> Double {
@@ -202,11 +224,10 @@ enum FaviconTone {
         return luminance
     }
 
-    private static func measureGlyphLuminance(_ image: NSImage) -> Double {
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return unmeasurable }
-        let pixelCount = sampleSide * sampleSide
-        var pixels = [UInt8](repeating: 0, count: pixelCount * 4)
-        let isDrawn = pixels.withUnsafeMutableBytes { buffer in
+    private static func sampledPixels(of image: NSImage) -> [SampledPixel]? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        var bytes = [UInt8](repeating: 0, count: sampleSide * sampleSide * 4)
+        let isDrawn = bytes.withUnsafeMutableBytes { buffer in
             guard let context = CGContext(
                 data: buffer.baseAddress, width: sampleSide, height: sampleSide, bitsPerComponent: 8, bytesPerRow: sampleSide * 4,
                 space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
@@ -214,20 +235,38 @@ enum FaviconTone {
             context.draw(cgImage, in: CGRect(x: 0, y: 0, width: sampleSide, height: sampleSide))
             return true
         }
-        guard isDrawn else { return unmeasurable }
-        var coverage = 0.0
-        var saturation = 0.0
-        var luminance = 0.0
-        for offset in stride(from: 0, to: pixels.count, by: 4) {
-            let red = Double(pixels[offset]) / 255
-            let green = Double(pixels[offset + 1]) / 255
-            let blue = Double(pixels[offset + 2]) / 255
-            coverage += Double(pixels[offset + 3]) / 255
-            saturation += max(red, green, blue) - min(red, green, blue)
-            luminance += 0.2126 * red + 0.7152 * green + 0.0722 * blue
+        guard isDrawn else { return nil }
+        return stride(from: 0, to: bytes.count, by: 4).map { offset in
+            SampledPixel(red: Double(bytes[offset]) / 255, green: Double(bytes[offset + 1]) / 255, blue: Double(bytes[offset + 2]) / 255, alpha: Double(bytes[offset + 3]) / 255)
         }
-        let isGlyph = coverage > 0 && coverage / Double(pixelCount) < glyphCoverageLimit && saturation / coverage < grayscaleSaturationLimit
+    }
+
+    private static func measureGlyphLuminance(_ image: NSImage) -> Double {
+        guard let pixels = sampledPixels(of: image) else { return unmeasurable }
+        let coverage = pixels.reduce(0) { $0 + $1.alpha }
+        let saturation = pixels.reduce(0) { $0 + $1.saturation }
+        let luminance = pixels.reduce(0) { $0 + $1.luminance }
+        let isGlyph = coverage > 0 && coverage / Double(pixels.count) < glyphCoverageLimit && saturation / coverage < grayscaleSaturationLimit
         return isGlyph ? luminance / coverage : unmeasurable
+    }
+
+    private static func measureAccent(_ image: NSImage) -> NSColor {
+        let vividPixels = (sampledPixels(of: image) ?? []).compactMap { pixel -> SampledPixel? in
+            guard pixel.alpha >= accentOpacityFloor else { return nil }
+            let opaque = SampledPixel(red: pixel.red / pixel.alpha, green: pixel.green / pixel.alpha, blue: pixel.blue / pixel.alpha, alpha: 1)
+            return opaque.saturation >= accentSaturationFloor ? opaque : nil
+        }
+        let buckets = Dictionary(grouping: vividPixels) { min(Int($0.hue * Double(hueBucketCount)), hueBucketCount - 1) }
+        let bucketWeights = buckets.mapValues { $0.reduce(0) { $0 + $1.saturation } }
+        guard let heaviest = bucketWeights.max(by: { $0.value < $1.value }), heaviest.value >= accentMinimumWeight,
+              let dominant = buckets[heaviest.key] else { return .clear }
+        let count = Double(dominant.count)
+        return NSColor(
+            srgbRed: dominant.reduce(0) { $0 + $1.red } / count,
+            green: dominant.reduce(0) { $0 + $1.green } / count,
+            blue: dominant.reduce(0) { $0 + $1.blue } / count,
+            alpha: 1
+        )
     }
 }
 
