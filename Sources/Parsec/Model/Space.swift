@@ -212,6 +212,7 @@ struct BrowserSettings: Codable {
     var hidesGoogleOneTap = true
     var customColors: [ThemeColor] = []
     var liquidGlass = 1.0
+    var surfaceOpacity = 1.0
     var folderIconColor: ThemeColor? = nil
 
     init() {}
@@ -278,6 +279,7 @@ struct BrowserSettings: Codable {
         hidesGoogleOneTap = try container.decodeIfPresent(Bool.self, forKey: .hidesGoogleOneTap) ?? defaults.hidesGoogleOneTap
         customColors = try container.decodeIfPresent([ThemeColor].self, forKey: .customColors) ?? []
         liquidGlass = try container.decodeIfPresent(Double.self, forKey: .liquidGlass) ?? defaults.liquidGlass
+        surfaceOpacity = try container.decodeIfPresent(Double.self, forKey: .surfaceOpacity) ?? defaults.surfaceOpacity
         folderIconColor = try container.decodeIfPresent(ThemeColor.self, forKey: .folderIconColor)
     }
 }

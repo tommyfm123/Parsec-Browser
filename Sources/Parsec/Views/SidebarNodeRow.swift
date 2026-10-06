@@ -9,10 +9,10 @@ struct SidebarNodeRow: View {
     var body: some View {
         switch node.kind {
         case .folder:
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: SidebarViewMetrics.rowSpacing) {
                 FolderRow(model: model, node: node, depth: depth)
                 if node.isExpanded {
-                    VStack(alignment: .leading, spacing: 1) {
+                    VStack(alignment: .leading, spacing: SidebarViewMetrics.rowSpacing) {
                         ForEach(node.children) { child in
                             SidebarNodeRow(model: model, node: child, depth: depth + 1)
                         }
@@ -52,13 +52,8 @@ struct RowBackground: View {
     var body: some View {
         RoundedRectangle(cornerRadius: SidebarPalette.rowCornerRadius, style: .continuous)
             .fill(SidebarPalette.rowFill(colorScheme, isSelected: isSelected, isHovering: isHovering))
-            .overlay {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: SidebarPalette.rowCornerRadius, style: .continuous)
-                        .fill(SidebarPalette.glassFill(colorScheme, isActive: false))
-                        .overlay(RoundedRectangle(cornerRadius: SidebarPalette.rowCornerRadius, style: .continuous).strokeBorder(Color.primary.opacity(0.16), lineWidth: 0.75))
-                }
-            }
+            .shadow(color: .black.opacity(isSelected ? SidebarPalette.selectedShadowOpacity : 0), radius: 2, y: 1)
+            .animation(.easeOut(duration: 0.12), value: isHovering)
     }
 }
 
@@ -174,7 +169,7 @@ struct TabRow: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            HStack(spacing: 8) {
+            HStack(spacing: SidebarViewMetrics.rowIconSpacing) {
                 if node.isSplit {
                     SplitRowContent(model: model, split: node, isSelected: isSelected)
                 } else {
@@ -221,7 +216,7 @@ struct TabRow: View {
         }
         .padding(.trailing, node.isSplit ? SplitRowMetrics.inset : 6)
         .frame(height: SidebarPalette.rowHeight)
-        .foregroundStyle(Color.primary.opacity(isSelected ? 1 : 0.75))
+        .foregroundStyle(Color.primary.opacity(isSelected ? 1 : SidebarPalette.primaryTextOpacity))
         .background {
             if node.isSplit {
                 SplitRowBackground(isDropTargeted: dropZone == .split)
@@ -343,7 +338,7 @@ struct FolderRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: SidebarViewMetrics.rowIconSpacing) {
             FolderIconView(symbolName: node.iconSymbol, size: SidebarViewMetrics.folderIconSize, weight: .semibold, isFilled: true, tint: BrowserStore.shared.settings.folderIconColor?.color)
             if model.renamingNodeID == node.id {
                 InlineRenameField(initialText: node.title, font: .system(size: SidebarViewMetrics.folderTitleSize, weight: .semibold)) { model.finishRenaming(node, with: $0) }
@@ -356,20 +351,10 @@ struct FolderRow: View {
                 .font(.system(size: 9, weight: .semibold))
                 .rotationEffect(.degrees(node.isExpanded ? 90 : 0))
                 .foregroundStyle(.secondary)
+                .opacity(isHovering ? 1 : 0)
             Spacer(minLength: 0)
             if isHovering {
-                ParsecDropdown(arrowEdge: .trailing) {
-                    FolderMenu.entries(model: model, node: node)
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 11, weight: .bold))
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
-                }
-                .foregroundStyle(.secondary)
-                .hoverHighlight(cornerRadius: 6)
-                .help("Opciones de la carpeta")
-                .accessibilityLabel("Opciones de la carpeta")
+                RowOptionsMenu(label: "Opciones de la carpeta") { FolderMenu.entries(model: model, node: node) }
             }
         }
         .padding(.leading, 10 + CGFloat(depth) * LayoutConstants.folderIndent)
@@ -393,6 +378,24 @@ struct FolderRow: View {
             FolderIconPicker(folder: node) { model.folderIconEditingID = nil }
                 .matchingPopoverAppearance()
         }
+    }
+}
+
+struct RowOptionsMenu: View {
+    let label: String
+    let entries: () -> [MenuEntry]
+
+    var body: some View {
+        ParsecDropdown(arrowEdge: .trailing, entries: entries) {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 11, weight: .bold))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .foregroundStyle(.secondary)
+        .hoverHighlight(cornerRadius: 6)
+        .help(label)
+        .accessibilityLabel(label)
     }
 }
 

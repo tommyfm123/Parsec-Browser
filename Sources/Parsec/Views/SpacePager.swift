@@ -201,9 +201,9 @@ struct SpaceContentView: View {
     var body: some View {
         GeometryReader { geometry in
             ScrollView(.vertical) {
-                VStack(spacing: 4) {
-                    LazyVStack(alignment: .leading, spacing: 4) {
-                        Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 1).padding(.vertical, 4)
+                VStack(spacing: SidebarViewMetrics.rowSpacing) {
+                    LazyVStack(alignment: .leading, spacing: SidebarViewMetrics.rowSpacing) {
+                        SpaceTitleRow(model: model, space: space)
                         ForEach(space.pinned) { node in
                             SidebarNodeRow(model: model, node: node, depth: 0)
                         }
@@ -244,27 +244,65 @@ struct SpaceContentView: View {
     }
 }
 
-struct TodayDivider: View {
+struct SpaceTitleRow: View {
     @Bindable var model: WindowModel
     @Bindable var space: Space
     @ViewState private var isHovering = false
 
     var body: some View {
         HStack(spacing: 6) {
-            Rectangle().fill(Color.primary.opacity(0.15)).frame(height: 1)
-            if isHovering && !space.today.isEmpty {
-                Button("Limpiar") { clearToday() }
-                    .buttonStyle(.plain)
-                    .clickable()
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Cerrar todas las pestañas de hoy")
+            if let iconSymbol = space.iconSymbol {
+                Image(systemName: iconSymbol).font(.system(size: 11, weight: .semibold)).accessibilityHidden(true)
+            }
+            Text(space.title.isEmpty ? "Space" : space.title)
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            if isHovering && !model.isPrivate {
+                RowOptionsMenu(label: "Opciones del Space") { SpaceMenu.entries(model: model, space: space) }
             }
         }
-        .padding(.horizontal, 8)
-        .frame(height: 14)
+        .foregroundStyle(.secondary)
+        .padding(.leading, 10)
+        .padding(.trailing, 8)
+        .frame(height: SidebarViewMetrics.spaceTitleHeight)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
+        .contextMenu {
+            if !model.isPrivate { NativeMenuItems(entries: SpaceMenu.entries(model: model, space: space)) }
+        }
+    }
+}
+
+struct TodayDivider: View {
+    @Bindable var model: WindowModel
+    @Bindable var space: Space
+    @ViewState private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Rectangle().fill(Color.primary.opacity(0.12)).frame(height: 1)
+            if !space.today.isEmpty {
+                Button(action: clearToday) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrow.down")
+                        Text("Limpiar")
+                    }
+                }
+                .buttonStyle(.plain)
+                .clickable()
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.primary.opacity(isHovering ? SidebarPalette.primaryTextOpacity : SidebarPalette.tertiaryTextOpacity))
+                .help("Cerrar todas las pestañas de hoy")
+                .accessibilityLabel("Cerrar todas las pestañas de hoy")
+            }
+        }
+        .padding(.leading, 10)
+        .padding(.trailing, 6)
+        .frame(height: 20)
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovering)
     }
 
     private func clearToday() {
@@ -278,15 +316,15 @@ struct NewTabRow: View {
     @ViewState private var isHovering = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: SidebarViewMetrics.rowIconSpacing) {
             Image(systemName: "plus").font(.system(size: 13, weight: .medium)).frame(width: 16)
             Text("Nueva pestaña").font(.system(size: 13))
             Spacer()
         }
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Color.primary.opacity(isHovering ? SidebarPalette.primaryTextOpacity : SidebarPalette.tertiaryTextOpacity))
         .padding(.horizontal, 10)
         .frame(height: SidebarPalette.rowHeight)
-        .background(RoundedRectangle(cornerRadius: LayoutConstants.rowCornerRadius, style: .continuous).fill(Color.primary.opacity(isHovering ? 0.08 : 0)))
+        .background(RowBackground(isSelected: false, isHovering: isHovering))
         .contentShape(Rectangle())
         .clickable()
         .onTapGesture { _ = model.openInNewTab(nil) }

@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import UniformTypeIdentifiers
 import WebKit
 
 @MainActor
@@ -7,8 +8,12 @@ import WebKit
 final class DownloadItem: Identifiable {
     enum State: String, Codable {
         case inProgress
+        case paused
         case finished
         case failed
+        case cancelled
+
+        var isActive: Bool { self == .inProgress || self == .paused }
     }
 
     let id: UUID
@@ -19,6 +24,9 @@ final class DownloadItem: Identifiable {
     var state = State.inProgress
     @ObservationIgnored var progressObservation: NSKeyValueObservation?
     @ObservationIgnored var isPrivate = false
+    @ObservationIgnored weak var download: WKDownload?
+    @ObservationIgnored weak var sourceWebView: WKWebView?
+    @ObservationIgnored var resumeData: Data?
 
     init(id: UUID = UUID(), filename: String, destinationURL: URL, createdAt: Date = Date(), state: State = .inProgress, fractionCompleted: Double = 0) {
         self.id = id
@@ -38,17 +46,25 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
     private static let persistenceURL = StorageConstants.applicationSupportURL.appending(path: "downloads.json")
 
     private(set) var items: [DownloadItem] = []
+    private(set) var startedItem: DownloadItem?
     @ObservationIgnored private var itemsByDownload: [ObjectIdentifier: DownloadItem] = [:]
     @ObservationIgnored private var privateDownloads: Set<ObjectIdentifier> = []
+    @ObservationIgnored private lazy var fallbackResumeWebView = WKWebView()
 
     override init() {
         super.init()
         items = Self.loadItems()
-        for item in items where item.state == .inProgress { item.state = .failed }
+        for item in items where item.state.isActive { item.state = .failed }
         persistItems()
     }
 
-    var activeCount: Int { items.filter { $0.state == .inProgress }.count }
+    var activeCount: Int { items.filter { $0.state.isActive }.count }
+
+    var activeProgress: Double {
+        let activeItems = items.filter { $0.state.isActive }
+        guard !activeItems.isEmpty else { return 0 }
+        return activeItems.reduce(0) { $0 + $1.fractionCompleted } / Double(activeItems.count)
+    }
 
     static var downloadFolderURL: URL {
         BrowserStore.shared.settings.downloadFolderPath.map { URL(fileURLWithPath: $0) }
@@ -61,6 +77,7 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
     }
 
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String, completionHandler: @escaping @MainActor (URL?) -> Void) {
+        if let resumedItem = itemsByDownload[ObjectIdentifier(download)] { return completionHandler(resumedItem.destinationURL) }
         let filename = WebSecurityPolicy.downloadFilename(suggestedFilename)
         guard confirmIfRisky(filename, source: response.url?.host() ?? "") else {
             privateDownloads.remove(ObjectIdentifier(download))
@@ -69,12 +86,9 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
         let destinationURL = uniqueDestination(for: filename)
         let item = DownloadItem(filename: destinationURL.lastPathComponent, destinationURL: destinationURL)
         item.isPrivate = privateDownloads.contains(ObjectIdentifier(download))
-        item.progressObservation = download.progress.observe(\.fractionCompleted) { progress, _ in
-            let fraction = progress.fractionCompleted
-            Task { @MainActor in item.fractionCompleted = fraction }
-        }
+        attach(download, to: item)
         items.insert(item, at: 0)
-        itemsByDownload[ObjectIdentifier(download)] = item
+        startedItem = item
         persistItems()
         completionHandler(destinationURL)
     }
@@ -87,6 +101,41 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
         finish(download, state: .failed)
     }
 
+    func pause(_ item: DownloadItem) {
+        guard item.state == .inProgress, let download = item.download else { return }
+        detach(download, from: item)
+        item.state = .paused
+        download.cancel { resumeData in
+            item.resumeData = resumeData
+            guard resumeData == nil else { return }
+            item.state = .failed
+            self.persistItems()
+        }
+    }
+
+    func resume(_ item: DownloadItem) {
+        guard item.state == .paused, let resumeData = item.resumeData else { return }
+        let webView = item.sourceWebView ?? fallbackResumeWebView
+        item.resumeData = nil
+        item.state = .inProgress
+        webView.resumeDownload(fromResumeData: resumeData) { download in
+            download.delegate = self
+            self.attach(download, to: item)
+        }
+    }
+
+    func cancel(_ item: DownloadItem) {
+        guard item.state.isActive else { return }
+        if let download = item.download {
+            detach(download, from: item)
+            download.cancel(nil)
+        }
+        item.resumeData = nil
+        item.state = .cancelled
+        removeFile(of: item)
+        persistItems()
+    }
+
     func reveal(_ item: DownloadItem) {
         NSWorkspace.shared.activateFileViewerSelecting([item.destinationURL])
     }
@@ -97,17 +146,40 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
     }
 
     func clearFinished() {
-        items.removeAll { $0.state != .inProgress }
+        items.removeAll { !$0.state.isActive }
         persistItems()
     }
 
-    func delete(_ item: DownloadItem) throws {
-        guard item.state != .inProgress else { return }
-        if FileManager.default.fileExists(atPath: item.destinationURL.path) {
-            try FileManager.default.removeItem(at: item.destinationURL)
-        }
+    func delete(_ item: DownloadItem) {
+        guard !item.state.isActive else { return }
+        removeFile(of: item)
         items.removeAll { $0.id == item.id }
         persistItems()
+    }
+
+    private func attach(_ download: WKDownload, to item: DownloadItem) {
+        item.download = download
+        item.sourceWebView = download.webView ?? item.sourceWebView
+        item.progressObservation = download.progress.observe(\.fractionCompleted) { progress, _ in
+            let fraction = progress.fractionCompleted
+            Task { @MainActor in item.fractionCompleted = fraction }
+        }
+        itemsByDownload[ObjectIdentifier(download)] = item
+    }
+
+    private func detach(_ download: WKDownload, from item: DownloadItem) {
+        itemsByDownload.removeValue(forKey: ObjectIdentifier(download))
+        item.progressObservation = nil
+        item.download = nil
+    }
+
+    private func removeFile(of item: DownloadItem) {
+        guard FileManager.default.fileExists(atPath: item.destinationURL.path) else { return }
+        do {
+            try FileManager.default.removeItem(at: item.destinationURL)
+        } catch {
+            NSApp.presentError(error)
+        }
     }
 
     private func confirmIfRisky(_ filename: String, source: String) -> Bool {
@@ -194,5 +266,13 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
             candidate = downloadsURL.appending(path: numberedName)
         }
         return candidate
+    }
+}
+
+extension DownloadItem {
+    var fileIcon: NSImage {
+        let fileExists = state == .finished && FileManager.default.fileExists(atPath: destinationURL.path)
+        guard !fileExists else { return NSWorkspace.shared.icon(forFile: destinationURL.path) }
+        return NSWorkspace.shared.icon(for: UTType(filenameExtension: destinationURL.pathExtension) ?? .data)
     }
 }

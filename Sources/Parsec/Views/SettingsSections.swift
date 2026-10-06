@@ -402,7 +402,7 @@ struct AppearanceSettings: View {
     @ViewState private var selectedID = BrowserStore.shared.settings.appIconID
 
     var body: some View {
-        SettingsGroup(title: "Liquid Glass", footer: "A la izquierda los botones se ven más sólidos. A la derecha, más vidrio líquido. Vale para los botones de toda la app.") {
+        SettingsGroup(title: "Liquid Glass", footer: "Vidrio: a la izquierda los botones se ven más sólidos, a la derecha más vidrio líquido. Opacidad: cuánto fondo tienen los botones, favoritos y barra de dirección. Vale para toda la app.") {
             LiquidGlassSettings()
         }
         SettingsGroup(title: "Ícono de la app", footer: "El ícono elegido se usa en el Dock y en el selector de apps, y se mantiene al reiniciar Parsec.") {
@@ -425,6 +425,7 @@ struct AppearanceSettings: View {
 
 struct LiquidGlassSettings: View {
     private var level: Binding<Double> { SettingsBinding.make(\.liquidGlass) }
+    private var opacity: Binding<Double> { SettingsBinding.make(\.surfaceOpacity) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -455,19 +456,8 @@ struct LiquidGlassSettings: View {
             .frame(maxWidth: .infinity)
             .frame(height: 150)
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            HStack(spacing: 10) {
-                Image(systemName: "square.on.square")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                Slider(value: level, in: 0...1)
-                    .accessibilityLabel("Liquid Glass")
-                    .accessibilityValue("\(Int((level.wrappedValue * 100).rounded())) por ciento")
-                Image(systemName: "camera.filters")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-            }
+            PercentSlider(label: "Liquid Glass", value: level, minimumSymbol: "square.on.square", maximumSymbol: "camera.filters")
+            PercentSlider(label: "Opacidad", value: opacity, minimumSymbol: "circle.dotted", maximumSymbol: "circle.fill")
         }
         .padding(.vertical, 4)
     }
@@ -477,6 +467,34 @@ struct LiquidGlassSettings: View {
             .font(.system(size: 15, weight: .medium))
             .frame(width: 46, height: 36)
             .liquidGlass(in: Capsule(), interactive: true, showsBorder: true)
+            .accessibilityHidden(true)
+    }
+}
+
+struct PercentSlider: View {
+    let label: String
+    @Binding var value: Double
+    let minimumSymbol: String
+    let maximumSymbol: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 84, alignment: .leading)
+            symbol(minimumSymbol)
+            Slider(value: $value, in: 0...1)
+                .accessibilityLabel(label)
+                .accessibilityValue("\(Int((value * 100).rounded())) por ciento")
+            symbol(maximumSymbol)
+        }
+    }
+
+    private func symbol(_ name: String) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(.secondary)
             .accessibilityHidden(true)
     }
 }

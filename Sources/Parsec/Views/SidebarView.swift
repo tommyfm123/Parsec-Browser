@@ -29,6 +29,7 @@ struct SidebarView: View {
         .frame(maxHeight: .infinity)
         .modifier(FloatingSidebarChrome(theme: model.currentSpace.theme, isFloating: isFloating))
         .overlay(alignment: .trailing) { SidebarResizeHandle(model: model) }
+        .downloadFlight(isActiveWindow: model.window?.isKeyWindow ?? true)
         .themedForeground(model.currentSpace.theme)
     }
 }
@@ -196,20 +197,21 @@ struct AddressBar: View {
 }
 
 enum SidebarPalette {
-    static let rowHeight: CGFloat = 32
+    static let rowHeight: CGFloat = 38
     static let rowCornerRadius: CGFloat = 10
+    static let selectedShadowOpacity = 0.12
+    static let favoriteSelectionBorderOpacity = 0.6
+    static let neutralSelectionBorderOpacity = 0.22
+    static let primaryTextOpacity = 0.88
+    static let tertiaryTextOpacity = 0.45
 
-    static func glassFill(_ colorScheme: ColorScheme, isActive: Bool) -> LinearGradient {
-        let opacity = colorScheme == .dark ? (isActive ? 0.28 : 0.16) : (isActive ? 0.9 : 0.7)
-        return LinearGradient(colors: [Color.white.opacity(opacity), Color.white.opacity(opacity * 0.55)], startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
     static func controlFill(_ colorScheme: ColorScheme, isActive: Bool) -> Color {
         colorScheme == .dark ? Color.white.opacity(isActive ? 0.12 : 0.07) : Color.black.opacity(isActive ? 0.08 : 0.05)
     }
 
     static func rowFill(_ colorScheme: ColorScheme, isSelected: Bool, isHovering: Bool) -> Color {
-        let darkOpacity = isSelected ? 0.16 : isHovering ? 0.07 : 0
-        let lightOpacity = isSelected ? 0.82 : isHovering ? 0.35 : 0
+        let darkOpacity = isSelected ? 0.17 : isHovering ? 0.08 : 0
+        let lightOpacity = isSelected ? 0.92 : isHovering ? 0.4 : 0
         return colorScheme == .dark ? Color.white.opacity(darkOpacity) : Color.white.opacity(lightOpacity)
     }
 }
@@ -252,11 +254,12 @@ struct FavoritesGrid: View {
                 GlassEffectContainer(spacing: 0) {
                     ZStack(alignment: .topLeading) {
                         ForEach(Array(displayedFavorites.enumerated()), id: \.element.id) { index, node in
-                            FavoriteTile(model: model, node: node, isDragging: draggedFavoriteID == node.id) { draggedFavoriteID = node.id }
-                                .frame(width: SidebarViewMetrics.favoriteTileWidth(availableWidth: width), height: SidebarViewMetrics.favoriteTileHeight)
-                                .offset(tileOffset(index: index, width: width))
-                                .opacity(isTileVisible(index: index) ? 1 : 0)
-                                .allowsHitTesting(index / pageSize == pageIndex)
+                            if isTileRendered(index: index) {
+                                FavoriteTile(model: model, node: node, isDragging: draggedFavoriteID == node.id) { draggedFavoriteID = node.id }
+                                    .frame(width: SidebarViewMetrics.favoriteTileWidth(availableWidth: width), height: SidebarViewMetrics.favoriteTileHeight)
+                                    .offset(tileOffset(index: index, width: width))
+                                    .allowsHitTesting(index / pageSize == pageIndex)
+                            }
                         }
                     }
                 }
@@ -267,7 +270,11 @@ struct FavoritesGrid: View {
                 .frame(width: width, height: pagedHeight, alignment: .leading)
                 .clipped()
                 .contentShape(Rectangle())
-                .background(SwipeMonitor(onChange: { trackSwipe($0, width: width) }, onEnd: { finishSwipe($0, width: width) }))
+                .background {
+                    if pageCount > 1 {
+                        SwipeMonitor(onChange: { trackSwipe($0, width: width) }, onEnd: { finishSwipe($0, width: width) })
+                    }
+                }
                 .dropDestination(for: String.self) { items, session in
                     SidebarDrop.handleFavorite(items, model: model, location: session.location, pageIndex: pageIndex, availableWidth: width)
                     finishDrag()
@@ -311,11 +318,12 @@ struct FavoritesGrid: View {
         }
         .onChange(of: pageCount) { _, count in
             pageIndex = min(pageIndex, count - 1)
+            dragOffset = 0
         }
     }
 
-    private func isTileVisible(index: Int) -> Bool {
-        index / pageSize == pageIndex || dragOffset != 0
+    private func isTileRendered(index: Int) -> Bool {
+        index / pageSize == pageIndex || dragOffset != 0 || draggedFavoriteID != nil
     }
 
     private func tileOffset(index: Int, width: CGFloat) -> CGSize {
@@ -402,15 +410,26 @@ struct FavoriteTile: View {
     @ViewState private var isHovering = false
 
     private var isSelected: Bool { model.currentSpace.selectedNodeID == node.id }
+    private var faviconURL: URL? { node.liveURL ?? node.children.first?.liveURL }
+    private var tileShape: RoundedRectangle { RoundedRectangle(cornerRadius: SidebarViewMetrics.favoriteCornerRadius, style: .continuous) }
+
+    private var selectionBorderColor: Color {
+        let favicon = FaviconStore.shared.icon(for: faviconURL, allowsNetwork: node.allowsFaviconNetwork)
+        let accent = favicon.flatMap(FaviconTone.accentColor)
+        return accent?.opacity(SidebarPalette.favoriteSelectionBorderOpacity) ?? Color.primary.opacity(SidebarPalette.neutralSelectionBorderOpacity)
+    }
 
     var body: some View {
-        FaviconView(url: node.liveURL ?? node.children.first?.liveURL, size: SidebarViewMetrics.favoriteIconSize, allowsNetwork: node.allowsFaviconNetwork)
+        FaviconView(url: faviconURL, size: SidebarViewMetrics.favoriteIconSize, allowsNetwork: node.allowsFaviconNetwork)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .liquidGlass(
-                in: RoundedRectangle(cornerRadius: SidebarViewMetrics.favoriteCornerRadius, style: .continuous),
-                isActive: isSelected || isHovering,
-                interactive: true
-            )
+            .overlay {
+                tileShape
+                    .strokeBorder(selectionBorderColor, lineWidth: SidebarViewMetrics.favoriteSelectionBorderWidth)
+                    .opacity(isSelected ? 1 : 0)
+                    .animation(.easeOut(duration: 0.15), value: isSelected)
+            }
+            .liquidGlass(in: tileShape, isActive: isSelected || isHovering, interactive: true)
+            .shadow(color: .black.opacity(isSelected ? SidebarPalette.selectedShadowOpacity : 0), radius: 2, y: 1)
             .contentShape(Rectangle())
             .clickable()
             .onTapGesture { model.select(node) }
@@ -455,13 +474,9 @@ struct SidebarFooter: View {
                     .matchingPopoverAppearance()
             }
             Spacer(minLength: 0)
-            SidebarCircleButton(symbolName: DownloadManager.shared.activeCount > 0 ? "arrow.down.circle.fill" : "arrow.down.to.line", label: "Descargas", action: openDownloads)
+            DownloadsButton(model: model)
         }
         .frame(height: SidebarView.headerHeight)
-    }
-
-    private func openDownloads() {
-        AppDelegate.shared.openDownloadsLibrary(profileID: model.profileID, allowsHistory: !model.isPrivate)
     }
 }
 
