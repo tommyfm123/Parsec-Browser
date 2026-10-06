@@ -74,7 +74,13 @@ final class WebPage: NSObject {
     private static let messageTypeKey = "type"
     private static let usernameKey = "username"
     private static let passwordKey = "password"
-    private static let faviconScript = "return document.querySelector(\"link[rel~='icon']\")?.href ?? null;"
+    private static let faviconScript = """
+    const isVector = link => /svg/i.test(link.type) || /\\.svg(\\?|$)/i.test(link.href);
+    const declaredSide = link => Math.max(0, ...(link.getAttribute("sizes") || "").split(/\\s+/).map(size => parseInt(size, 10) || 0));
+    const sharpness = link => isVector(link) ? Infinity : declaredSide(link);
+    const links = [...document.querySelectorAll("link[rel~='icon']")].sort((first, second) => sharpness(second) - sharpness(first));
+    return links[0]?.href ?? null;
+    """
     private static let credentialDocumentScript = "return window.parsecCredentialDocumentID || '';"
     private static let fillScript = "return window.parsecFillCredentials(username, password, expectedDocumentID, expectedOrigin);"
     private static let pendingFillLifetime: TimeInterval = 120
