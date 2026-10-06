@@ -29,6 +29,7 @@ struct SidebarView: View {
         .frame(maxHeight: .infinity)
         .modifier(FloatingSidebarChrome(theme: model.currentSpace.theme, isFloating: isFloating))
         .overlay(alignment: .trailing) { SidebarResizeHandle(model: model) }
+        .downloadFlight(isActiveWindow: model.window?.isKeyWindow ?? true)
         .themedForeground(model.currentSpace.theme)
     }
 }
@@ -473,13 +474,9 @@ struct SidebarFooter: View {
                     .matchingPopoverAppearance()
             }
             Spacer(minLength: 0)
-            SidebarCircleButton(symbolName: DownloadManager.shared.activeCount > 0 ? "arrow.down.circle.fill" : "arrow.down.to.line", label: "Descargas", action: openDownloads)
+            DownloadsButton(model: model)
         }
         .frame(height: SidebarView.headerHeight)
-    }
-
-    private func openDownloads() {
-        AppDelegate.shared.openDownloadsLibrary(profileID: model.profileID, allowsHistory: !model.isPrivate)
     }
 }
 

@@ -50,9 +50,7 @@ struct DownloadsLibraryView: View {
     @ViewState private var searchText = ""
     @ViewState private var dateFilter = LibraryDateFilter.all
     @ViewState private var historyEntries: [HistoryEntry] = []
-    @ViewState private var itemToDelete: DownloadItem?
     @ViewState private var isClearConfirmationPresented = false
-    @ViewState private var deleteError: String?
 
     init(initialSection: DownloadsLibrarySection, profileID: UUID, allowsHistory: Bool) {
         self.profileID = profileID
@@ -73,11 +71,11 @@ struct DownloadsLibraryView: View {
         }
     }
 
-    private var downloadGroups: [(title: String, items: [DownloadItem])] {
+    private var downloadGroups: [LibraryDayGroup<DownloadItem>] {
         groupItems(filteredDownloads, date: \.createdAt)
     }
 
-    private var historyGroups: [(title: String, items: [HistoryEntry])] {
+    private var historyGroups: [LibraryDayGroup<HistoryEntry>] {
         groupItems(filteredHistory, date: \.lastVisited)
     }
 
@@ -91,22 +89,11 @@ struct DownloadsLibraryView: View {
         .background(OpaqueWindowBackground())
         .ignoresSafeArea()
         .task { refreshHistory() }
-        .confirmationDialog("¿Eliminar esta descarga?", item: $itemToDelete) { item in
-            Button("Eliminar archivo y registro", role: .destructive) { delete(item) }
-            Button("Cancelar", role: .cancel) {}
-        } message: { item in
-            Text("Se eliminará \(item.filename) de la carpeta de descargas.")
-        }
         .confirmationDialog("¿Limpiar las descargas terminadas?", isPresented: $isClearConfirmationPresented) {
             Button("Limpiar lista", role: .destructive) { manager.clearFinished() }
             Button("Cancelar", role: .cancel) {}
         } message: {
             Text("Los archivos descargados seguirán en tu Mac.")
-        }
-        .alert("No se pudo eliminar la descarga", isPresented: deleteErrorPresented) {
-            Button("Aceptar", role: .cancel) { deleteError = nil }
-        } message: {
-            Text(deleteError ?? "Inténtalo de nuevo.")
         }
     }
 
@@ -145,7 +132,7 @@ struct DownloadsLibraryView: View {
                 if selection == .downloads {
                     Button("Limpiar") { isClearConfirmationPresented = true }
                         .buttonStyle(.borderless)
-                        .disabled(!manager.items.contains { $0.state != .inProgress })
+                        .disabled(!manager.items.contains { !$0.state.isActive })
                 } else {
                     Button("Actualizar", systemImage: "arrow.clockwise", action: refreshHistory)
                         .buttonStyle(.borderless)
@@ -217,19 +204,18 @@ struct DownloadsLibraryView: View {
                 detail: searchText.isEmpty ? "Las descargas que hagas van a aparecer acá." : "Probá con otro nombre o cambiá el filtro de fecha."
             )
         } else {
-            ForEach(downloadGroups.indices, id: \.self) { groupIndex in
-                let group = downloadGroups[groupIndex]
+            ForEach(downloadGroups) { group in
                 VStack(alignment: .leading, spacing: 8) {
                     Text(group.title.uppercased())
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .padding(.leading, 4)
-                    VStack(spacing: 0) {
+                    VStack(spacing: 2) {
                         ForEach(group.items) { item in
-                            DownloadLibraryRow(item: item, onOpen: { manager.open(item) }, onReveal: { manager.reveal(item) }, onDelete: { itemToDelete = item })
-                            if item.id != group.items.last?.id { Divider().padding(.leading, 48) }
+                            DownloadRow(item: item)
                         }
                     }
+                    .padding(4)
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.07)))
                     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.09)))
                 }
@@ -246,8 +232,7 @@ struct DownloadsLibraryView: View {
                 detail: searchText.isEmpty ? "Las páginas que visites van a aparecer acá." : "Probá con otro título o dirección."
             )
         } else {
-            ForEach(historyGroups.indices, id: \.self) { groupIndex in
-                let group = historyGroups[groupIndex]
+            ForEach(historyGroups) { group in
                 VStack(alignment: .leading, spacing: 8) {
                     Text(group.title.uppercased())
                         .font(.system(size: 10, weight: .semibold))
@@ -266,16 +251,12 @@ struct DownloadsLibraryView: View {
         }
     }
 
-    private var deleteErrorPresented: Binding<Bool> {
-        Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })
-    }
-
-    private func groupItems<Item>(_ items: [Item], date: KeyPath<Item, Date>) -> [(title: String, items: [Item])] {
+    private func groupItems<Item>(_ items: [Item], date: KeyPath<Item, Date>) -> [LibraryDayGroup<Item>] {
         let calendar = Calendar.current
         let groups = Dictionary(grouping: items) { calendar.startOfDay(for: $0[keyPath: date]) }
         return groups.keys.sorted(by: >).compactMap { day in
             guard let groupedItems = groups[day] else { return nil }
-            return (dateTitle(day), groupedItems)
+            return LibraryDayGroup(day: day, title: dateTitle(day), items: groupedItems)
         }
     }
 
@@ -286,19 +267,19 @@ struct DownloadsLibraryView: View {
         return date.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
     }
 
-    private func delete(_ item: DownloadItem) {
-        do {
-            try manager.delete(item)
-        } catch {
-            deleteError = error.localizedDescription
-        }
-    }
-
     private func refreshHistory() {
         guard allowsHistory else { return }
         historyEntries = BrowserStore.shared.history.allVisits(profileID: profileID)
     }
 
+}
+
+struct LibraryDayGroup<Item>: Identifiable {
+    let day: Date
+    let title: String
+    let items: [Item]
+
+    var id: Date { day }
 }
 
 struct DownloadsLibrarySidebarRow: View {
@@ -331,70 +312,6 @@ struct DownloadsLibrarySidebarRow: View {
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-}
-
-struct DownloadLibraryRow: View {
-    let item: DownloadItem
-    let onOpen: () -> Void
-    let onReveal: () -> Void
-    let onDelete: () -> Void
-
-    private var status: String {
-        switch item.state {
-        case .inProgress: "Descargando · \(Int(item.fractionCompleted * 100))%"
-        case .finished: item.createdAt.formatted(.dateTime.hour().minute())
-        case .failed: "Descarga interrumpida"
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: symbolName)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 28, height: 28)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(iconColor.gradient))
-            VStack(alignment: .leading, spacing: 3) {
-                Text(item.filename)
-                    .font(.system(size: 13, weight: .medium))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                if item.state == .inProgress {
-                    ProgressView(value: item.fractionCompleted).controlSize(.small)
-                } else {
-                    Text(status).font(.system(size: 11)).foregroundStyle(.secondary)
-                }
-            }
-            Spacer(minLength: 8)
-            if item.state == .finished {
-                IconButton(symbolName: "arrow.up.right.square", label: "Abrir archivo", action: onOpen)
-                IconButton(symbolName: "folder", label: "Mostrar en Finder", action: onReveal)
-            }
-            if item.state != .inProgress {
-                IconButton(symbolName: "trash", label: "Eliminar descarga", action: onDelete)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) { if item.state == .finished { onOpen() } }
-    }
-
-    private var symbolName: String {
-        switch item.state {
-        case .inProgress: "arrow.down"
-        case .finished: "doc.fill"
-        case .failed: "exclamationmark"
-        }
-    }
-
-    private var iconColor: Color {
-        switch item.state {
-        case .inProgress: .blue
-        case .finished: .secondary
-        case .failed: .red
-        }
     }
 }
 
