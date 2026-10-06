@@ -437,6 +437,10 @@ enum LiquidGlass {
         min(max(BrowserStore.shared.settings.liquidGlass, 0), 1)
     }
 
+    static var surfaceOpacity: Double {
+        min(max(BrowserStore.shared.settings.surfaceOpacity, 0), 1)
+    }
+
     static func material(level: Double, interactive: Bool, tint: Color?) -> Glass {
         guard level >= identityThreshold else { return .identity }
         let base: Glass = level >= clearGlassThreshold ? .clear : .regular
@@ -445,7 +449,7 @@ enum LiquidGlass {
     }
 
     static func solidOpacity(level: Double) -> Double {
-        (1 - level) * maximumSolidOpacity
+        (1 - level) * maximumSolidOpacity * surfaceOpacity
     }
 
     static func borderOpacity(level: Double) -> Double {
